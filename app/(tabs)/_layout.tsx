@@ -27,7 +27,7 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="certs"
-        options={{ title: 'Certs', tabBarIcon: ({ color }) => <FontAwesome name="trophy" size={24} color={color} /> }}
+        options={{ title: 'Badges', tabBarIcon: ({ color }) => <FontAwesome name="trophy" size={24} color={color} /> }}
       />
     </Tabs>
   );
