@@ -3,7 +3,6 @@ import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-// Result structure for the UI
 interface ScannedItem {
   id: string;
   name: string;
@@ -32,7 +31,7 @@ export default function CarbonSyncScreen() {
 
     if (!result.canceled) {
       setImage(result.assets[0].uri);
-      startFakeScan(); // Day 3 UI testing logic
+      startFakeScan(); 
     }
   };
 
@@ -48,12 +47,19 @@ export default function CarbonSyncScreen() {
     }, 2000);
   };
 
+  // 1. DELETE FUNCTION
+  const deleteItem = (id: string) => {
+    setResults(prev => prev.filter(item => item.id !== id));
+  };
+
+  // 2. TOTAL CALCULATION
+  const totalImpact = results.reduce((sum, item) => sum + item.carbonScore, 0).toFixed(1);
+
   return (
     <View style={styles.container}>
       <Text style={styles.header}>Carbon-Sync 📸</Text>
       <Text style={styles.subHeader}>Upload a bill to see your impact</Text>
       
-      {/* Upload Zone */}
       <TouchableOpacity style={styles.uploadZone} onPress={pickImage}>
         {image ? (
           <Image source={{ uri: image }} style={styles.previewImage} />
@@ -72,23 +78,50 @@ export default function CarbonSyncScreen() {
         </View>
       )}
 
-      {/* Results List */}
       <FlatList
         data={results}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <View style={styles.resultCard}>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={styles.itemName}>{item.name}</Text>
               <Text style={styles.itemScore}>{item.carbonScore} kg CO₂</Text>
             </View>
-            <View style={[styles.tag, item.category === 'High' ? styles.tagRed : item.category === 'Medium' ? styles.tagYellow : styles.tagGreen]}>
-              <Text style={styles.tagText}>{item.category}</Text>
+            
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={[styles.tag, item.category === 'High' ? styles.tagRed : item.category === 'Medium' ? styles.tagYellow : styles.tagGreen]}>
+                <Text style={styles.tagText}>{item.category}</Text>
+              </View>
+
+              {/* DELETE BUTTON */}
+              <TouchableOpacity onPress={() => deleteItem(item.id)} style={styles.deleteBtn}>
+                <Ionicons name="trash-outline" size={20} color="#FF5252" />
+              </TouchableOpacity>
             </View>
           </View>
         )}
-        contentContainerStyle={{ paddingBottom: 40, marginTop: 20 }}
+        contentContainerStyle={{ paddingBottom: 100, marginTop: 20 }}
+        // 3. EMPTY STATE MESSAGE
+        ListEmptyComponent={() => !loading && image && (
+          <Text style={{ textAlign: 'center', color: '#999', marginTop: 20 }}>No items left in this scan.</Text>
+        )}
       />
+
+      {/* 4. TOTAL SUMMARY CARD (Dikhega tabhi jab items honge) */}
+      {results.length > 0 && (
+        <View style={styles.summaryCard}>
+          <View>
+            <Text style={styles.summaryLabel}>Total Bill Impact</Text>
+            <Text style={styles.summaryTotal}>{totalImpact} kg CO₂</Text>
+          </View>
+          <TouchableOpacity 
+            style={styles.saveBtn}
+            onPress={() => Alert.alert("Success", "Items saved to your Eco-History! 🌱")}
+          >
+            <Text style={styles.saveBtnText}>Log Data</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
@@ -121,7 +154,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
     borderColor: '#EEE',
-    elevation: 2
+    elevation: 2,
+    alignItems: 'center'
   },
   itemName: { fontSize: 16, fontWeight: '600' },
   itemScore: { fontSize: 13, color: '#888' },
@@ -129,5 +163,24 @@ const styles = StyleSheet.create({
   tagRed: { backgroundColor: '#FFEBEE' },
   tagYellow: { backgroundColor: '#FFFDE7' },
   tagGreen: { backgroundColor: '#E8F5E9' },
-  tagText: { fontSize: 11, fontWeight: 'bold' }
+  tagText: { fontSize: 11, fontWeight: 'bold' },
+  deleteBtn: { marginLeft: 15, padding: 5 },
+  // Summary Card Styles
+  summaryCard: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    right: 20,
+    padding: 20,
+    backgroundColor: '#1B5E20',
+    borderRadius: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    elevation: 5
+  },
+  summaryLabel: { color: '#E8F5E9', fontSize: 12 },
+  summaryTotal: { color: '#fff', fontSize: 22, fontWeight: 'bold' },
+  saveBtn: { backgroundColor: '#fff', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12 },
+  saveBtnText: { color: '#1B5E20', fontWeight: 'bold' }
 });
