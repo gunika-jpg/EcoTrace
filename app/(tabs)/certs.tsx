@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -12,6 +12,8 @@ import {
   View
 } from 'react-native';
 
+// --- THE FIX: Path to your lib/supabase.js ---
+import { supabase } from '../../lib/supabase';
 const BADGES = [
   { id: '1', title: 'Carbon Killer', desc: 'Saved 10kg CO₂', icon: 'leaf', color: '#4CAF50', locked: false },
   { id: '2', title: 'Tree Planter', desc: 'Funded 5 Trees', icon: 'bonfire', color: '#FF9800', locked: false },
@@ -24,18 +26,25 @@ const BADGES = [
 export default function CertsScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedBadge, setSelectedBadge] = useState<any>(null);
+  const [userName, setUserName] = useState("Eco Hero");
 
-  // --- FIX: Define the logged-in user here ---
-  // In a real app, you would get this from Firebase Auth or a UserContext
-  const currentUser = {
-    name: "Pooja", // This will dynamically change based on the login
-  };
+  // Fetch real user name on load
+  useEffect(() => {
+    const fetchUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        // Tries full_name first, then email prefix
+        const name = user.user_metadata?.full_name || user.email?.split('@')[0] || "Eco Hero";
+        setUserName(name);
+      }
+    };
+    fetchUser();
+  }, []);
 
   const onShare = async () => {
     try {
       await Share.share({
-        // Updated to use dynamic name in sharing too
-        message: `${currentUser.name} just earned the ${selectedBadge?.title} certificate on EcoTrace! 🌿 Join me in saving the planet! #EcoTrace #GreenCert`,
+        message: `${userName} just earned the ${selectedBadge?.title} certificate on EcoTrace! 🌿`,
       });
     } catch (error: any) {
       Alert.alert("Sharing Error", error.message);
@@ -54,20 +63,10 @@ export default function CertsScreen() {
       }}
     >
       <View style={[styles.iconCircle, { backgroundColor: item.locked ? '#E0E0E0' : `${item.color}15` }]}>
-        <Ionicons 
-          name={item.icon as any} 
-          size={38} 
-          color={item.locked ? '#999' : item.color} 
-        />
+        <Ionicons name={item.icon as any} size={38} color={item.locked ? '#999' : item.color} />
       </View>
       <Text style={[styles.badgeTitle, item.locked && styles.lockedText]}>{item.title}</Text>
       <Text style={styles.badgeDesc}>{item.locked ? 'Locked' : item.desc}</Text>
-      
-      {item.locked && (
-        <View style={styles.lockBadge}>
-          <Ionicons name="lock-closed" size={10} color="white" />
-        </View>
-      )}
     </TouchableOpacity>
   );
 
@@ -77,7 +76,6 @@ export default function CertsScreen() {
         <View style={styles.headerSection}>
           <Text style={styles.headerTitle}>Badge Vault 🏆</Text>
           <Text style={styles.headerSub}>Turn your green habits into rewards</Text>
-          
           <View style={styles.progressCard}>
             <View style={styles.progressInfo}>
               <Text style={styles.progressLabel}>Current Progress</Text>
@@ -107,23 +105,13 @@ export default function CertsScreen() {
              </View>
              <Text style={styles.modalTitle}>Official Certificate</Text>
              <Text style={styles.modalDesc}>
-               {/* FIX: Using the dynamic currentUser.name */}
-               This certifies that <Text style={{fontWeight: 'bold'}}>{currentUser.name}</Text> has achieved the status of <Text style={{fontWeight: 'bold'}}>{selectedBadge?.title}</Text>.
+               This certifies that <Text style={{fontWeight: 'bold'}}>{userName}</Text> has achieved the status of <Text style={{fontWeight: 'bold'}}>{selectedBadge?.title}</Text>.
              </Text>
-             
              <View style={styles.buttonRow}>
-               <TouchableOpacity 
-                 style={[styles.shareBtn, {borderColor: selectedBadge?.color}]} 
-                 onPress={onShare}
-               >
-                 <Ionicons name="share-social" size={20} color={selectedBadge?.color} style={{marginRight: 8}} />
+               <TouchableOpacity style={[styles.shareBtn, {borderColor: selectedBadge?.color}]} onPress={onShare}>
                  <Text style={[styles.shareBtnText, {color: selectedBadge?.color}]}>Share</Text>
                </TouchableOpacity>
-
-               <TouchableOpacity 
-                 style={[styles.closeBtn, {backgroundColor: selectedBadge?.color}]} 
-                 onPress={() => setModalVisible(false)}
-               >
+               <TouchableOpacity style={[styles.closeBtn, {backgroundColor: selectedBadge?.color}]} onPress={() => setModalVisible(false)}>
                  <Text style={styles.closeBtnText}>Done</Text>
                </TouchableOpacity>
              </View>
@@ -146,32 +134,19 @@ const styles = StyleSheet.create({
   progressTrack: { height: 8, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 10 },
   progressFill: { height: '100%', backgroundColor: '#81C784', borderRadius: 10 },
   listContainer: { padding: 15 },
-  badgeCard: { 
-    flex: 1, 
-    margin: 10, 
-    padding: 20, 
-    backgroundColor: '#fff', 
-    borderRadius: 25, 
-    alignItems: 'center', 
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-  },
-  lockedCard: { backgroundColor: '#F2F2F2', elevation: 0 },
+  badgeCard: { flex: 1, margin: 10, padding: 20, backgroundColor: '#fff', borderRadius: 25, alignItems: 'center', elevation: 4 },
   iconCircle: { width: 70, height: 70, borderRadius: 35, justifyContent: 'center', alignItems: 'center', marginBottom: 15 },
   badgeTitle: { fontSize: 16, fontWeight: 'bold', color: '#333', textAlign: 'center' },
   badgeDesc: { fontSize: 12, color: '#888', marginTop: 4 },
+  lockedCard: { backgroundColor: '#F2F2F2' },
   lockedText: { color: '#999' },
-  lockBadge: { position: 'absolute', top: 15, right: 15, backgroundColor: '#999', padding: 5, borderRadius: 10 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' },
   modalContent: { width: '85%', backgroundColor: 'white', borderRadius: 30, padding: 30, alignItems: 'center' },
   modalRibbon: { width: 100, height: 100, borderRadius: 50, justifyContent: 'center', alignItems: 'center', marginTop: -80, elevation: 10 },
   modalTitle: { fontSize: 24, fontWeight: 'bold', marginTop: 20, color: '#1B5E20' },
   modalDesc: { fontSize: 16, textAlign: 'center', color: '#555', marginVertical: 20, lineHeight: 24 },
   buttonRow: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginTop: 10 },
-  shareBtn: { flex: 1, flexDirection: 'row', marginRight: 10, borderWidth: 2, borderRadius: 30, justifyContent: 'center', alignItems: 'center', paddingVertical: 15 },
+  shareBtn: { flex: 1, marginRight: 10, borderWidth: 2, borderRadius: 30, justifyContent: 'center', alignItems: 'center', paddingVertical: 15 },
   shareBtnText: { fontWeight: 'bold', fontSize: 16 },
   closeBtn: { flex: 1, justifyContent: 'center', alignItems: 'center', borderRadius: 30, paddingVertical: 15 },
   closeBtnText: { color: 'white', fontWeight: 'bold', fontSize: 16 }
