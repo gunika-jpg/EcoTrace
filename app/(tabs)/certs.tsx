@@ -12,7 +12,6 @@ import {
   View
 } from 'react-native';
 
-// 1. DATA ARRAY (Must be defined so FlatList can see it)
 const BADGES = [
   { id: '1', title: 'Carbon Killer', desc: 'Saved 10kg CO₂', icon: 'leaf', color: '#4CAF50', locked: false },
   { id: '2', title: 'Tree Planter', desc: 'Funded 5 Trees', icon: 'bonfire', color: '#FF9800', locked: false },
@@ -26,18 +25,23 @@ export default function CertsScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedBadge, setSelectedBadge] = useState<any>(null);
 
-  // 2. SHARING LOGIC
+  // --- FIX: Define the logged-in user here ---
+  // In a real app, you would get this from Firebase Auth or a UserContext
+  const currentUser = {
+    name: "Pooja", // This will dynamically change based on the login
+  };
+
   const onShare = async () => {
     try {
       await Share.share({
-        message: `I just earned the ${selectedBadge?.title} certificate on EcoTrace! 🌿 I've already ${selectedBadge?.desc.toLowerCase()}. Join me in saving the planet! #EcoTrace #GreenCert`,
+        // Updated to use dynamic name in sharing too
+        message: `${currentUser.name} just earned the ${selectedBadge?.title} certificate on EcoTrace! 🌿 Join me in saving the planet! #EcoTrace #GreenCert`,
       });
     } catch (error: any) {
       Alert.alert("Sharing Error", error.message);
     }
   };
 
-  // 3. RENDER EACH BADGE CARD
   const renderBadge = ({ item }: { item: any }) => (
     <TouchableOpacity 
       activeOpacity={0.7}
@@ -70,7 +74,6 @@ export default function CertsScreen() {
   return (
     <View style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header Section */}
         <View style={styles.headerSection}>
           <Text style={styles.headerTitle}>Badge Vault 🏆</Text>
           <Text style={styles.headerSub}>Turn your green habits into rewards</Text>
@@ -86,7 +89,6 @@ export default function CertsScreen() {
           </View>
         </View>
 
-        {/* Badges Grid */}
         <FlatList
           data={BADGES}
           numColumns={2}
@@ -97,7 +99,6 @@ export default function CertsScreen() {
         />
       </ScrollView>
 
-      {/* Modern Certificate Modal */}
       <Modal animationType="fade" transparent={true} visible={modalVisible}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -106,10 +107,10 @@ export default function CertsScreen() {
              </View>
              <Text style={styles.modalTitle}>Official Certificate</Text>
              <Text style={styles.modalDesc}>
-               This certifies that <Text style={{fontWeight: 'bold'}}>Gunika</Text> has achieved the status of <Text style={{fontWeight: 'bold'}}>{selectedBadge?.title}</Text>.
+               {/* FIX: Using the dynamic currentUser.name */}
+               This certifies that <Text style={{fontWeight: 'bold'}}>{currentUser.name}</Text> has achieved the status of <Text style={{fontWeight: 'bold'}}>{selectedBadge?.title}</Text>.
              </Text>
              
-             {/* Action Buttons Row */}
              <View style={styles.buttonRow}>
                <TouchableOpacity 
                  style={[styles.shareBtn, {borderColor: selectedBadge?.color}]} 
