@@ -2,14 +2,15 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { useFonts } from 'expo-font';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react'; // Added useState
 import 'react-native-reanimated';
 
-import { useColorScheme } from '@/components/useColorScheme';
-import { AuthProvider, useAuth } from '@/context/AuthContext';
+import Onboarding from '../components/Onboarding'; // Added Import
+import { useColorScheme } from '../components/useColorScheme'; // Fixed relative path
+import { AuthProvider, useAuth } from '../context/AuthContext'; // Fixed relative path
 
 export {
-  ErrorBoundary,
+  ErrorBoundary
 } from 'expo-router';
 
 export const unstable_settings = {
@@ -18,7 +19,6 @@ export const unstable_settings = {
 
 SplashScreen.preventAutoHideAsync();
 
-// This component redirects to login if not logged in
 function AuthGate() {
   const { user, loading } = useAuth();
   const segments = useSegments();
@@ -67,7 +67,15 @@ export default function RootLayout() {
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
+  // State to control Onboarding visibility
+  const [showOnboarding, setShowOnboarding] = useState(true);
 
+  // If onboarding is active, we return it immediately
+  if (showOnboarding) {
+    return <Onboarding onFinish={() => setShowOnboarding(false)} />;
+  }
+
+  // Once finished, we fall back to the AuthGate and Stack navigation
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <AuthGate />

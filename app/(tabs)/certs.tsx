@@ -1,7 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
-import { FlatList, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  Alert,
+  FlatList,
+  Modal,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from 'react-native';
 
+// 1. DATA ARRAY (Must be defined so FlatList can see it)
 const BADGES = [
   { id: '1', title: 'Carbon Killer', desc: 'Saved 10kg CO₂', icon: 'leaf', color: '#4CAF50', locked: false },
   { id: '2', title: 'Tree Planter', desc: 'Funded 5 Trees', icon: 'bonfire', color: '#FF9800', locked: false },
@@ -15,6 +26,18 @@ export default function CertsScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedBadge, setSelectedBadge] = useState<any>(null);
 
+  // 2. SHARING LOGIC
+  const onShare = async () => {
+    try {
+      await Share.share({
+        message: `I just earned the ${selectedBadge?.title} certificate on EcoTrace! 🌿 I've already ${selectedBadge?.desc.toLowerCase()}. Join me in saving the planet! #EcoTrace #GreenCert`,
+      });
+    } catch (error: any) {
+      Alert.alert("Sharing Error", error.message);
+    }
+  };
+
+  // 3. RENDER EACH BADGE CARD
   const renderBadge = ({ item }: { item: any }) => (
     <TouchableOpacity 
       activeOpacity={0.7}
@@ -47,11 +70,11 @@ export default function CertsScreen() {
   return (
     <View style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Header Section */}
         <View style={styles.headerSection}>
           <Text style={styles.headerTitle}>Badge Vault 🏆</Text>
           <Text style={styles.headerSub}>Turn your green habits into rewards</Text>
           
-          {/* Progress Summary Card */}
           <View style={styles.progressCard}>
             <View style={styles.progressInfo}>
               <Text style={styles.progressLabel}>Current Progress</Text>
@@ -63,6 +86,7 @@ export default function CertsScreen() {
           </View>
         </View>
 
+        {/* Badges Grid */}
         <FlatList
           data={BADGES}
           numColumns={2}
@@ -81,10 +105,27 @@ export default function CertsScreen() {
                 <Ionicons name="ribbon" size={60} color="white" />
              </View>
              <Text style={styles.modalTitle}>Official Certificate</Text>
-             <Text style={styles.modalDesc}>This certifies that **Gunika** has achieved the status of **{selectedBadge?.title}**.</Text>
-             <TouchableOpacity style={[styles.closeBtn, {backgroundColor: selectedBadge?.color}]} onPress={() => setModalVisible(false)}>
-               <Text style={styles.closeBtnText}>Done</Text>
-             </TouchableOpacity>
+             <Text style={styles.modalDesc}>
+               This certifies that <Text style={{fontWeight: 'bold'}}>Gunika</Text> has achieved the status of <Text style={{fontWeight: 'bold'}}>{selectedBadge?.title}</Text>.
+             </Text>
+             
+             {/* Action Buttons Row */}
+             <View style={styles.buttonRow}>
+               <TouchableOpacity 
+                 style={[styles.shareBtn, {borderColor: selectedBadge?.color}]} 
+                 onPress={onShare}
+               >
+                 <Ionicons name="share-social" size={20} color={selectedBadge?.color} style={{marginRight: 8}} />
+                 <Text style={[styles.shareBtnText, {color: selectedBadge?.color}]}>Share</Text>
+               </TouchableOpacity>
+
+               <TouchableOpacity 
+                 style={[styles.closeBtn, {backgroundColor: selectedBadge?.color}]} 
+                 onPress={() => setModalVisible(false)}
+               >
+                 <Text style={styles.closeBtnText}>Done</Text>
+               </TouchableOpacity>
+             </View>
           </View>
         </View>
       </Modal>
@@ -104,7 +145,19 @@ const styles = StyleSheet.create({
   progressTrack: { height: 8, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 10 },
   progressFill: { height: '100%', backgroundColor: '#81C784', borderRadius: 10 },
   listContainer: { padding: 15 },
-  badgeCard: { flex: 1, margin: 10, padding: 20, backgroundColor: '#fff', borderRadius: 25, alignItems: 'center', elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8 },
+  badgeCard: { 
+    flex: 1, 
+    margin: 10, 
+    padding: 20, 
+    backgroundColor: '#fff', 
+    borderRadius: 25, 
+    alignItems: 'center', 
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+  },
   lockedCard: { backgroundColor: '#F2F2F2', elevation: 0 },
   iconCircle: { width: 70, height: 70, borderRadius: 35, justifyContent: 'center', alignItems: 'center', marginBottom: 15 },
   badgeTitle: { fontSize: 16, fontWeight: 'bold', color: '#333', textAlign: 'center' },
@@ -116,6 +169,9 @@ const styles = StyleSheet.create({
   modalRibbon: { width: 100, height: 100, borderRadius: 50, justifyContent: 'center', alignItems: 'center', marginTop: -80, elevation: 10 },
   modalTitle: { fontSize: 24, fontWeight: 'bold', marginTop: 20, color: '#1B5E20' },
   modalDesc: { fontSize: 16, textAlign: 'center', color: '#555', marginVertical: 20, lineHeight: 24 },
-  closeBtn: { paddingHorizontal: 40, paddingVertical: 15, borderRadius: 30 },
+  buttonRow: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginTop: 10 },
+  shareBtn: { flex: 1, flexDirection: 'row', marginRight: 10, borderWidth: 2, borderRadius: 30, justifyContent: 'center', alignItems: 'center', paddingVertical: 15 },
+  shareBtnText: { fontWeight: 'bold', fontSize: 16 },
+  closeBtn: { flex: 1, justifyContent: 'center', alignItems: 'center', borderRadius: 30, paddingVertical: 15 },
   closeBtnText: { color: 'white', fontWeight: 'bold', fontSize: 16 }
 });
