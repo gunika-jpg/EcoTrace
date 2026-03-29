@@ -1,9 +1,16 @@
-import { useEffect, useState } from 'react';
-import {
-  View, Text, StyleSheet, TouchableOpacity,
-  TextInput, ActivityIndicator, ScrollView, RefreshControl
-} from 'react-native';
 import { supabase } from '@/lib/supabase';
+import { useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  AppState,
+  RefreshControl,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from 'react-native';
 
 export default function SquadsScreen() {
   const [user, setUser] = useState<any>(null);
@@ -19,53 +26,65 @@ export default function SquadsScreen() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  const appState = useRef(AppState.currentState);
+
   useEffect(() => {
     init();
-  }, []);
+    const subscription = AppState.addEventListener('change', nextAppState => {
+      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+        refreshData();
+      }
+      appState.current = nextAppState;
+    });
+    return () => subscription.remove();
+  }, [activeSquad, view]);
 
   async function init() {
     const { data: { user } } = await supabase.auth.getUser();
     setUser(user);
-    if (user) await fetchMySquads(user.id);
+    if (user) await refreshData(user.id);
     setLoading(false);
   }
 
-  async function fetchMySquads(userId: string) {
-    const { data } = await supabase
+  async function refreshData(userId = user?.id) {
+    if (!userId) return;
+    const { data: squadsData } = await supabase
       .from('squad_members')
       .select('*, squads(*)')
       .eq('user_id', userId);
-    if (data) setMySquads(data);
+    if (squadsData) setMySquads(squadsData);
+    if (activeSquad && view === 'leaderboard') {
+      await fetchLeaderboard(activeSquad.id);
+    }
   }
 
   async function fetchLeaderboard(squadId: string) {
-    const { data } = await supabase
+    // We pull the user's REAL score from the 'users' join
+    const { data, error } = await supabase
       .from('squad_members')
-      .select('*, users(name, email, total_carbon_score)')
+      .select('*, users!inner(name, email, total_carbon_score)')
       .eq('squad_id', squadId)
       .order('weekly_contribution', { ascending: false });
-    if (data) setLeaderboard(data);
+    
+    if (data) {
+      setLeaderboard(data);
+    }
   }
 
   async function openLeaderboard(squad: any) {
     setActiveSquad(squad);
     await fetchLeaderboard(squad.id);
     setView('leaderboard');
-
-    // Live updates via Supabase Realtime
-    supabase
-      .channel(`squad-${squad.id}`)
-      .on('postgres_changes', {
-        event: '*', schema: 'public',
-        table: 'squad_members',
-        filter: `squad_id=eq.${squad.id}`
-      }, () => fetchLeaderboard(squad.id))
-      .subscribe();
   }
 
+  const handleShare = async (code: string) => {
+    try {
+      await Share.share({ message: `Join my Squad on CarbonSync! Code: ${code}` });
+    } catch (e) { console.log(e); }
+  };
+
   async function createSquad() {
-    setError('');
-    if (!squadName.trim()) { setError('Please enter a squad name.'); return; }
+    if (!squadName.trim()) { setError('Enter a name'); return; }
     try {
       const { data: squad, error: e } = await supabase
         .from('squads')
@@ -73,230 +92,132 @@ export default function SquadsScreen() {
         .select().single();
       if (e) throw e;
       await supabase.from('squad_members').insert({ squad_id: squad.id, user_id: user.id, role: 'admin' });
-      setSuccess(`Squad "${squad.name}" created! Invite code: ${squad.invite_code}`);
-      setSquadName(''); setSquadDesc('');
-      await fetchMySquads(user.id);
+      await refreshData();
       setView('home');
     } catch (e: any) { setError(e.message); }
   }
 
   async function joinSquad() {
-    setError('');
-    if (!inviteCode.trim()) { setError('Please enter an invite code.'); return; }
+    if (!inviteCode.trim()) { setError('Enter code'); return; }
     try {
-      const { data: squad, error: e } = await supabase
-        .from('squads').select('*').eq('invite_code', inviteCode.trim()).single();
-      if (e) throw new Error('Squad not found. Check your invite code.');
+      const { data: squad, error: e } = await supabase.from('squads').select('*').eq('invite_code', inviteCode.trim()).single();
+      if (e) throw new Error('Squad not found');
       await supabase.from('squad_members').insert({ squad_id: squad.id, user_id: user.id });
-      setSuccess(`Joined "${squad.name}" successfully!`);
-      setInviteCode('');
-      await fetchMySquads(user.id);
+      await refreshData();
       setView('home');
     } catch (e: any) { setError(e.message); }
   }
 
-  async function onRefresh() {
-    setRefreshing(true);
-    if (user) await fetchMySquads(user.id);
-    if (activeSquad && view === 'leaderboard') await fetchLeaderboard(activeSquad.id);
-    setRefreshing(false);
-  }
-
   const MEDAL = ['🥇', '🥈', '🥉'];
+  // Find max score for the progress bar scaling
+  const maxScore = Math.max(...leaderboard.map(m => m.users?.total_carbon_score || 0), 1);
 
-  if (loading) return (
-    <View style={styles.center}>
-      <ActivityIndicator size="large" color="#3C3489" />
-    </View>
-  );
+  if (loading) return <View style={styles.center}><ActivityIndicator size="large" color="#4F46E5" /></View>;
 
-  // ── LEADERBOARD VIEW ──
   if (view === 'leaderboard') return (
-    <ScrollView style={styles.container} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => setView('home')}>
-          <Text style={styles.back}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{activeSquad?.name}</Text>
-        <Text style={styles.headerSub}>Live Leaderboard • updates in real time</Text>
+    <ScrollView style={styles.container} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => refreshData()} />}>
+      <View style={styles.headerGradient}>
+        <TouchableOpacity onPress={() => setView('home')}><Text style={styles.backText}>← Back</Text></TouchableOpacity>
+        <Text style={styles.headerTitleLarge}>{activeSquad?.name}</Text>
+        <Text style={styles.headerSubLight}>Live Rankings</Text>
       </View>
 
-      {/* Squad stats */}
-      <View style={styles.statsRow}>
-        <View style={styles.statCard}>
-          <Text style={styles.statNum}>{leaderboard.length}</Text>
-          <Text style={styles.statLabel}>Members</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statNum}>{activeSquad?.total_savings?.toFixed(1) || '0'}</Text>
-          <Text style={styles.statLabel}>kg CO₂ saved</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statNum}>{activeSquad?.trees_funded || '0'}</Text>
-          <Text style={styles.statLabel}>Trees funded</Text>
-        </View>
+      <View style={styles.statsContainer}>
+        <View style={styles.statCard}><Text style={styles.statNum}>{leaderboard.length}</Text><Text style={styles.statLabel}>Members</Text></View>
+        <View style={styles.statCard}><Text style={[styles.statNum, {color: '#10B981'}]}>{activeSquad?.total_savings?.toFixed(1) || '0'}</Text><Text style={styles.statLabel}>kg Total</Text></View>
+        <TouchableOpacity style={[styles.statCard, {backgroundColor: '#EEF2FF'}]} onPress={() => refreshData()}><Text style={{fontSize: 18}}>🔄</Text><Text style={styles.statLabel}>Sync</Text></TouchableOpacity>
       </View>
 
-      {/* Invite code */}
-      <View style={styles.inviteBox}>
-        <Text style={styles.inviteLabel}>Invite code</Text>
-        <Text style={styles.inviteCode}>{activeSquad?.invite_code}</Text>
-        <Text style={styles.inviteHint}>Share this with friends to join your squad</Text>
-      </View>
-
-      {/* Leaderboard */}
-      <Text style={styles.sectionTitle}>This week's rankings</Text>
-      {leaderboard.map((member, i) => (
-        <View key={member.id} style={[styles.memberRow, i === 0 && styles.memberFirst]}>
-          <Text style={styles.rank}>{MEDAL[i] || `#${i + 1}`}</Text>
-          <View style={styles.memberInfo}>
-            <Text style={styles.memberName}>
-              {member.users?.name || member.users?.email?.split('@')[0] || 'Member'}
-              {member.role === 'admin' && <Text style={styles.adminBadge}> 👑</Text>}
-            </Text>
-            <Text style={styles.memberScore}>{member.weekly_contribution || 0} kg saved this week</Text>
-          </View>
-          <Text style={styles.totalScore}>{member.users?.total_carbon_score?.toFixed(1) || '0'} kg</Text>
-        </View>
-      ))}
-
-      {leaderboard.length === 0 && (
-        <Text style={styles.empty}>No members yet. Share the invite code!</Text>
-      )}
-    </ScrollView>
-  );
-
-  // ── CREATE SQUAD VIEW ──
-  if (view === 'create') return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => setView('home')}>
-          <Text style={styles.back}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Create a Squad</Text>
-      </View>
-      <View style={styles.formWrap}>
-        <Text style={styles.label}>Squad name *</Text>
-        <TextInput style={styles.input} placeholder="e.g. Green Warriors Delhi" value={squadName} onChangeText={setSquadName} />
-        <Text style={styles.label}>Description (optional)</Text>
-        <TextInput style={[styles.input, { height: 80 }]} placeholder="What's your squad about?" value={squadDesc} onChangeText={setSquadDesc} multiline />
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
-        <TouchableOpacity style={styles.btnPurple} onPress={createSquad}>
-          <Text style={styles.btnText}>Create Squad</Text>
-        </TouchableOpacity>
+      <View style={styles.leaderboardSection}>
+        {leaderboard.map((member, i) => {
+          // KEY CHANGE: Use users.total_carbon_score if weekly_contribution is 0
+          const displayScore = member.users?.total_carbon_score || 0;
+          
+          return (
+            <View key={member.id} style={[styles.rankRow, i === 0 && styles.rankRowGold]}>
+              <View style={styles.rankBadge}><Text style={styles.rankText}>{MEDAL[i] || i + 1}</Text></View>
+              <View style={styles.rankMain}>
+                <Text style={styles.rankName}>
+                  {member.users?.name || 'Member'}
+                  {member.role === 'admin' && <Text style={{fontSize: 12}}> 👑</Text>}
+                </Text>
+                <View style={styles.progressBg}>
+                  <View style={[styles.progressFill, { width: `${(displayScore / maxScore) * 100}%` }]} />
+                </View>
+              </View>
+              <View style={styles.rankValue}>
+                  <Text style={styles.valAmount}>{displayScore.toFixed(1)}</Text>
+                  <Text style={styles.valUnit}>kg</Text>
+              </View>
+            </View>
+          );
+        })}
       </View>
     </ScrollView>
   );
 
-  // ── JOIN SQUAD VIEW ──
-  if (view === 'join') return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => setView('home')}>
-          <Text style={styles.back}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Join a Squad</Text>
-      </View>
-      <View style={styles.formWrap}>
-        <Text style={styles.label}>Enter invite code</Text>
-        <TextInput style={styles.input} placeholder="e.g. a1b2c3d4" value={inviteCode} onChangeText={setInviteCode} autoCapitalize="none" />
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
-        <TouchableOpacity style={styles.btnPurple} onPress={joinSquad}>
-          <Text style={styles.btnText}>Join Squad</Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
-  );
-
-  // ── HOME VIEW ──
   return (
-    <ScrollView style={styles.container} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Social Squads 👥</Text>
-        <Text style={styles.headerSub}>Team up and compete for the top spot</Text>
+    <ScrollView style={styles.container} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => refreshData()} />}>
+      <View style={styles.homeHeader}>
+        <Text style={styles.welcomeText}>CarbonSync</Text>
+        <Text style={styles.homeTitle}>Social Squads</Text>
       </View>
 
-      {success ? (
-        <View style={styles.successBox}>
-          <Text style={styles.successText}>{success}</Text>
-        </View>
-      ) : null}
-
-      <View style={styles.actionRow}>
-        <TouchableOpacity style={styles.actionBtn} onPress={() => { setError(''); setView('create'); }}>
-          <Text style={styles.actionEmoji}>➕</Text>
-          <Text style={styles.actionLabel}>Create Squad</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.actionBtn} onPress={() => { setError(''); setView('join'); }}>
-          <Text style={styles.actionEmoji}>🔗</Text>
-          <Text style={styles.actionLabel}>Join Squad</Text>
-        </TouchableOpacity>
+      <View style={styles.mainActions}>
+        <TouchableOpacity style={[styles.heroBtn, { backgroundColor: '#4F46E5' }]} onPress={() => setView('create')}><Text style={styles.heroBtnText}>+ Create</Text></TouchableOpacity>
+        <TouchableOpacity style={[styles.heroBtn, { backgroundColor: '#10B981' }]} onPress={() => setView('join')}><Text style={styles.heroBtnText}>🔗 Join</Text></TouchableOpacity>
       </View>
 
-      <Text style={styles.sectionTitle}>Your Squads</Text>
-
-      {mySquads.length === 0 && (
-        <Text style={styles.empty}>You're not in any squad yet. Create or join one!</Text>
-      )}
-
+      <Text style={styles.listHeader}>Your Squads</Text>
       {mySquads.map((m) => (
-        <TouchableOpacity key={m.id} style={styles.squadCard} onPress={() => openLeaderboard(m.squads)}>
-          <View style={styles.squadCardLeft}>
-            <Text style={styles.squadName}>{m.squads?.name}</Text>
-            <Text style={styles.squadDesc}>{m.squads?.description || 'Tap to view leaderboard'}</Text>
-            <Text style={styles.squadMeta}>
-              {m.role === 'admin' ? '👑 Admin' : '👤 Member'} · Code: {m.squads?.invite_code}
-            </Text>
+        <TouchableOpacity key={m.id} style={styles.squadListItem} onPress={() => openLeaderboard(m.squads)}>
+          <View style={styles.squadIconBox}><Text style={styles.squadIconText}>{m.squads?.name?.charAt(0)}</Text></View>
+          <View style={styles.squadMainInfo}>
+            <Text style={styles.squadTitleText}>{m.squads?.name}</Text>
+            <Text style={styles.codeTag}>Code: {m.squads?.invite_code} • {m.role}</Text>
           </View>
-          <Text style={styles.squadArrow}>›</Text>
+          <Text style={styles.chevron}>›</Text>
         </TouchableOpacity>
       ))}
     </ScrollView>
   );
 }
 
-const P = '#3C3489';
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f7ff' },
+  container: { flex: 1, backgroundColor: '#F9FAFB' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { padding: 20, paddingTop: 24, backgroundColor: '#EEEDFE', borderBottomLeftRadius: 20, borderBottomRightRadius: 20, marginBottom: 16 },
-  headerTitle: { fontSize: 22, fontWeight: '700', color: P },
-  headerSub: { fontSize: 13, color: '#6b6aad', marginTop: 4 },
-  back: { fontSize: 14, color: P, marginBottom: 8, fontWeight: '500' },
-  statsRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginBottom: 14 },
-  statCard: { flex: 1, backgroundColor: '#fff', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#e0dfff' },
-  statNum: { fontSize: 20, fontWeight: '700', color: P },
-  statLabel: { fontSize: 11, color: '#888', marginTop: 2 },
-  inviteBox: { marginHorizontal: 16, backgroundColor: '#EEEDFE', borderRadius: 12, padding: 14, marginBottom: 16 },
-  inviteLabel: { fontSize: 11, color: '#6b6aad', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
-  inviteCode: { fontSize: 24, fontWeight: '700', color: P, letterSpacing: 2, marginVertical: 4 },
-  inviteHint: { fontSize: 12, color: '#6b6aad' },
-  sectionTitle: { fontSize: 14, fontWeight: '600', color: '#444', paddingHorizontal: 16, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
-  memberRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', marginHorizontal: 16, marginBottom: 8, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#efefff' },
-  memberFirst: { borderColor: '#FFD700', borderWidth: 2 },
-  rank: { fontSize: 22, width: 36 },
-  memberInfo: { flex: 1 },
-  memberName: { fontSize: 15, fontWeight: '600', color: '#1a1a2e' },
-  adminBadge: { fontSize: 12 },
-  memberScore: { fontSize: 12, color: '#888', marginTop: 2 },
-  totalScore: { fontSize: 13, fontWeight: '600', color: P },
-  empty: { textAlign: 'center', color: '#aaa', fontSize: 14, padding: 32 },
-  actionRow: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, marginBottom: 20 },
-  actionBtn: { flex: 1, backgroundColor: '#fff', borderRadius: 14, padding: 18, alignItems: 'center', borderWidth: 1, borderColor: '#e0dfff' },
-  actionEmoji: { fontSize: 28, marginBottom: 6 },
-  actionLabel: { fontSize: 13, fontWeight: '600', color: P },
-  squadCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', marginHorizontal: 16, marginBottom: 10, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#e0dfff' },
-  squadCardLeft: { flex: 1 },
-  squadName: { fontSize: 16, fontWeight: '700', color: P },
-  squadDesc: { fontSize: 13, color: '#777', marginTop: 2 },
-  squadMeta: { fontSize: 12, color: '#aaa', marginTop: 6 },
-  squadArrow: { fontSize: 24, color: '#ccc' },
-  formWrap: { padding: 20 },
-  label: { fontSize: 13, fontWeight: '600', color: '#444', marginBottom: 6 },
-  input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', borderRadius: 12, padding: 14, fontSize: 15, marginBottom: 16 },
-  errorText: { color: 'red', fontSize: 13, marginBottom: 10 },
-  btnPurple: { backgroundColor: P, borderRadius: 12, paddingVertical: 15, alignItems: 'center' },
-  btnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  successBox: { backgroundColor: '#E1F5EE', borderRadius: 12, padding: 14, marginHorizontal: 16, marginBottom: 12 },
-  successText: { color: '#085041', fontSize: 13, fontWeight: '500' },
+  headerGradient: { backgroundColor: '#4F46E5', padding: 24, paddingTop: 40, borderBottomLeftRadius: 30 },
+  headerTitleLarge: { fontSize: 28, fontWeight: '800', color: '#FFF' },
+  headerSubLight: { color: '#C7D2FE', fontSize: 14 },
+  backText: { color: '#FFF', marginBottom: 10, fontWeight: '600' },
+  statsContainer: { flexDirection: 'row', paddingHorizontal: 20, marginTop: -30, gap: 10 },
+  statCard: { flex: 1, backgroundColor: '#FFF', borderRadius: 20, padding: 16, alignItems: 'center', elevation: 5 },
+  statNum: { fontSize: 20, fontWeight: '800', color: '#1F2937' },
+  statLabel: { fontSize: 10, color: '#6B7280', fontWeight: '700', textTransform: 'uppercase' },
+  leaderboardSection: { padding: 20 },
+  rankRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', padding: 15, borderRadius: 18, marginBottom: 12, elevation: 1 },
+  rankRowGold: { borderColor: '#FDE047', borderWidth: 2 },
+  rankBadge: { width: 40 },
+  rankText: { fontSize: 18, fontWeight: '700', color: '#9CA3AF' },
+  rankMain: { flex: 1 },
+  rankName: { fontSize: 16, fontWeight: '700', color: '#1F2937' },
+  progressBg: { height: 6, backgroundColor: '#F3F4F6', borderRadius: 10, marginTop: 8 },
+  progressFill: { height: '100%', backgroundColor: '#4F46E5', borderRadius: 10 },
+  rankValue: { alignItems: 'flex-end', marginLeft: 10 },
+  valAmount: { fontSize: 18, fontWeight: '800', color: '#4F46E5' },
+  valUnit: { fontSize: 10, color: '#9CA3AF' },
+  homeHeader: { padding: 24, paddingTop: 50 },
+  welcomeText: { color: '#6366f1', fontWeight: '700' },
+  homeTitle: { fontSize: 32, fontWeight: '800', color: '#111827' },
+  mainActions: { flexDirection: 'row', gap: 15, paddingHorizontal: 24, marginBottom: 25 },
+  heroBtn: { flex: 1, padding: 20, borderRadius: 20, alignItems: 'center' },
+  heroBtnText: { color: '#FFF', fontWeight: '800', fontSize: 16 },
+  listHeader: { fontSize: 18, fontWeight: '700', paddingHorizontal: 24, marginBottom: 15 },
+  squadListItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', marginHorizontal: 24, marginBottom: 12, padding: 16, borderRadius: 20 },
+  squadIconBox: { width: 50, height: 50, backgroundColor: '#EEF2FF', borderRadius: 15, justifyContent: 'center', alignItems: 'center' },
+  squadIconText: { fontSize: 22, fontWeight: '800', color: '#4F46E5' },
+  squadMainInfo: { flex: 1, marginLeft: 15 },
+  squadTitleText: { fontSize: 16, fontWeight: '700' },
+  codeTag: { fontSize: 12, color: '#9CA3AF', marginTop: 4 },
+  chevron: { fontSize: 24, color: '#D1D5DB' },
 });
