@@ -5,7 +5,6 @@ import {
   AppState,
   RefreshControl,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -24,20 +23,19 @@ export default function SquadsScreen() {
   const [squadDesc, setSquadDesc] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
 
   const appState = useRef(AppState.currentState);
 
   useEffect(() => {
     init();
-    const subscription = AppState.addEventListener('change', nextAppState => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
       if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
         refreshData();
       }
       appState.current = nextAppState;
     });
     return () => subscription.remove();
-  }, [activeSquad, view]);
+  }, [activeSquad?.id, view]);
 
   async function init() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -48,19 +46,24 @@ export default function SquadsScreen() {
 
   async function refreshData(userId = user?.id) {
     if (!userId) return;
+    setRefreshing(true);
+    
     const { data: squadsData } = await supabase
       .from('squad_members')
       .select('*, squads(*)')
       .eq('user_id', userId);
+    
     if (squadsData) setMySquads(squadsData);
+    
+    // Update leaderboard if we are currently viewing one
     if (activeSquad && view === 'leaderboard') {
       await fetchLeaderboard(activeSquad.id);
     }
+    setRefreshing(false);
   }
 
   async function fetchLeaderboard(squadId: string) {
-    // We pull the user's REAL score from the 'users' join
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('squad_members')
       .select('*, users!inner(name, email, total_carbon_score)')
       .eq('squad_id', squadId)
@@ -77,45 +80,27 @@ export default function SquadsScreen() {
     setView('leaderboard');
   }
 
-  const handleShare = async (code: string) => {
-    try {
-      await Share.share({ message: `Join my Squad on CarbonSync! Code: ${code}` });
-    } catch (e) { console.log(e); }
-  };
+  // --- CALCULATIONS ---
+  // Fix 1: Sum the total from the leaderboard array dynamically
+  const totalSquadKg = leaderboard.reduce(
+    (acc, member) => acc + (member.users?.total_carbon_score || 0), 
+    0
+  );
 
-  async function createSquad() {
-    if (!squadName.trim()) { setError('Enter a name'); return; }
-    try {
-      const { data: squad, error: e } = await supabase
-        .from('squads')
-        .insert({ name: squadName.trim(), description: squadDesc.trim(), created_by: user.id })
-        .select().single();
-      if (e) throw e;
-      await supabase.from('squad_members').insert({ squad_id: squad.id, user_id: user.id, role: 'admin' });
-      await refreshData();
-      setView('home');
-    } catch (e: any) { setError(e.message); }
-  }
-
-  async function joinSquad() {
-    if (!inviteCode.trim()) { setError('Enter code'); return; }
-    try {
-      const { data: squad, error: e } = await supabase.from('squads').select('*').eq('invite_code', inviteCode.trim()).single();
-      if (e) throw new Error('Squad not found');
-      await supabase.from('squad_members').insert({ squad_id: squad.id, user_id: user.id });
-      await refreshData();
-      setView('home');
-    } catch (e: any) { setError(e.message); }
-  }
+  // Fix 2: Ensure maxScore is at least 1 to avoid division by zero or NaN
+  const maxScore = leaderboard.length > 0 
+    ? Math.max(...leaderboard.map(m => m.users?.total_carbon_score || 0), 1) 
+    : 1;
 
   const MEDAL = ['🥇', '🥈', '🥉'];
-  // Find max score for the progress bar scaling
-  const maxScore = Math.max(...leaderboard.map(m => m.users?.total_carbon_score || 0), 1);
 
   if (loading) return <View style={styles.center}><ActivityIndicator size="large" color="#4F46E5" /></View>;
 
   if (view === 'leaderboard') return (
-    <ScrollView style={styles.container} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => refreshData()} />}>
+    <ScrollView 
+      style={styles.container} 
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => refreshData()} />}
+    >
       <View style={styles.headerGradient}>
         <TouchableOpacity onPress={() => setView('home')}><Text style={styles.backText}>← Back</Text></TouchableOpacity>
         <Text style={styles.headerTitleLarge}>{activeSquad?.name}</Text>
@@ -123,14 +108,29 @@ export default function SquadsScreen() {
       </View>
 
       <View style={styles.statsContainer}>
-        <View style={styles.statCard}><Text style={styles.statNum}>{leaderboard.length}</Text><Text style={styles.statLabel}>Members</Text></View>
-        <View style={styles.statCard}><Text style={[styles.statNum, {color: '#10B981'}]}>{activeSquad?.total_savings?.toFixed(1) || '0'}</Text><Text style={styles.statLabel}>kg Total</Text></View>
-        <TouchableOpacity style={[styles.statCard, {backgroundColor: '#EEF2FF'}]} onPress={() => refreshData()}><Text style={{fontSize: 18}}>🔄</Text><Text style={styles.statLabel}>Sync</Text></TouchableOpacity>
+        <View style={styles.statCard}>
+          <Text style={styles.statNum}>{leaderboard.length}</Text>
+          <Text style={styles.statLabel}>Members</Text>
+        </View>
+        
+        <View style={styles.statCard}>
+          <Text style={[styles.statNum, {color: '#10B981'}]}>
+            {totalSquadKg.toFixed(1)}
+          </Text>
+          <Text style={styles.statLabel}>kg Total</Text>
+        </View>
+
+        <TouchableOpacity 
+          style={[styles.statCard, {backgroundColor: '#EEF2FF'}]} 
+          onPress={() => refreshData()}
+        >
+          <Text style={{fontSize: 18}}>{refreshing ? '⏳' : '🔄'}</Text>
+          <Text style={styles.statLabel}>Sync</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.leaderboardSection}>
         {leaderboard.map((member, i) => {
-          // KEY CHANGE: Use users.total_carbon_score if weekly_contribution is 0
           const displayScore = member.users?.total_carbon_score || 0;
           
           return (
@@ -157,7 +157,10 @@ export default function SquadsScreen() {
   );
 
   return (
-    <ScrollView style={styles.container} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => refreshData()} />}>
+    <ScrollView 
+      style={styles.container} 
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => refreshData()} />}
+    >
       <View style={styles.homeHeader}>
         <Text style={styles.welcomeText}>CarbonSync</Text>
         <Text style={styles.homeTitle}>Social Squads</Text>
