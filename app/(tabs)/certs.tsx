@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Dimensions,
   FlatList,
@@ -16,35 +17,72 @@ import { supabase } from '../../lib/supabase';
 
 const { width } = Dimensions.get('window');
 
-const BADGES = [
-  { id: '1', title: 'Carbon Killer', desc: 'Saved 10kg CO₂', icon: 'leaf', color: '#2E7D32', locked: false },
-  { id: '2', title: 'Tree Planter', desc: 'Funded 5 Trees', icon: 'bonfire', color: '#EF6C00', locked: false },
-  { id: '3', title: 'Plastic Free', desc: '7 Day Streak', icon: 'water', color: '#1565C0', locked: true },
-  { id: '4', title: 'Eco Warrior', desc: 'Top 10% Squad', icon: 'shield-checkmark', color: '#7B1FA2', locked: true },
-  { id: '5', title: 'Earth Hero', desc: '1 Month Green', icon: 'globe', color: '#C2185B', locked: true },
-  { id: '6', title: 'Solar Soul', desc: 'Daylight King', icon: 'sunny', color: '#FBC02D', locked: true },
+// 1. TEMPLATE: Define the badge requirements here
+const BADGE_TEMPLATES = [
+  { id: '1', title: 'Carbon Killer', desc: 'Saved 10kg CO₂', icon: 'leaf', color: '#2E7D32', goal: 10 },
+  { id: '2', title: 'Tree Planter', desc: 'Funded 5 Trees', icon: 'bonfire', color: '#EF6C00', goal: 5 },
+  { id: '3', title: 'Plastic Free', desc: '7 Day Streak', icon: 'water', color: '#1565C0', goal: 7 },
+  { id: '4', title: 'Eco Warrior', desc: 'Top 10% Squad', icon: 'shield-checkmark', color: '#7B1FA2', goal: 1 }, // Logic: 1 if in top 10%
+  { id: '5', title: 'Earth Hero', desc: '1 Month Green', icon: 'globe', color: '#C2185B', goal: 30 },
+  { id: '6', title: 'Solar Soul', desc: 'Daylight King', icon: 'sunny', color: '#FBC02D', goal: 1 },
 ];
 
 export default function CertsScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedBadge, setSelectedBadge] = useState<any>(null);
   const [userName, setUserName] = useState("Eco Hero");
+  const [userStats, setUserStats] = useState({ points: 0, co2_saved: 0, streak: 0 });
+  const [badges, setBadges] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchUser = async () => {
+    fetchUserData();
+  }, []);
+
+  const fetchUserData = async () => {
+    setLoading(true);
+    try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const name = user.user_metadata?.full_name || user.email?.split('@')[0] || "Eco Hero";
-        setUserName(name);
+        setUserName(user.user_metadata?.full_name || user.email?.split('@')[0] || "Eco Hero");
+
+        // 2. FETCH ACTUAL DATA: Replace 'profiles' with your actual table name
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('points, co2_saved, streak')
+          .eq('id', user.id)
+          .single();
+
+        // If DB is empty for demo, we use fallback values so badges actually unlock
+        const stats = data || { points: 1250, co2_saved: 15, streak: 8 }; 
+        setUserStats(stats);
+
+        // 3. LOGIC: Map templates to "unlocked" status based on stats
+        const updatedBadges = BADGE_TEMPLATES.map(badge => {
+          let isLocked = true;
+          if (badge.id === '1') isLocked = stats.co2_saved < 10;
+          if (badge.id === '2') isLocked = stats.points < 500; // Example: 500pts = 5 trees
+          if (badge.id === '3') isLocked = stats.streak < 7;
+          if (badge.id === '4') isLocked = stats.points < 1000; // Top 10% if > 1000pts
+          if (badge.id === '5') isLocked = stats.streak < 30;
+          if (badge.id === '6') isLocked = false; // Always unlocked for demo
+
+          return { ...badge, locked: isLocked };
+        });
+
+        setBadges(updatedBadges);
       }
-    };
-    fetchUser();
-  }, []);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const onShare = async () => {
     try {
       await Share.share({
-        message: `🌿 ${userName} just achieved the "${selectedBadge?.title}" milestone on CarbonSync! Join the movement.`,
+        message: `🌿 ${userName} just achieved the "${selectedBadge?.title}" milestone on EcoTrace! Join the movement at IIT Delhi.`,
       });
     } catch (error: any) {
       Alert.alert("Sharing Error", error.message);
@@ -59,6 +97,8 @@ export default function CertsScreen() {
         if (!item.locked) {
           setSelectedBadge(item);
           setModalVisible(true);
+        } else {
+          Alert.alert("Locked", `You need to reach the requirement for ${item.title} to unlock this certificate.`);
         }
       }}
     >
@@ -71,16 +111,27 @@ export default function CertsScreen() {
       </View>
       <View style={styles.textContainer}>
         <Text style={[styles.badgeTitle, item.locked && styles.lockedText]}>{item.title}</Text>
-        <Text style={styles.badgeDesc} numberOfLines={1}>{item.locked ? 'Requirements not met' : item.desc}</Text>
+        <Text style={styles.badgeDesc} numberOfLines={1}>
+            {item.locked ? 'Requirements not met' : item.desc}
+        </Text>
       </View>
-      {!item.locked && <View style={[styles.statusTag, {backgroundColor: item.color}]}><Text style={styles.statusText}>UNLOCKED</Text></View>}
+      {!item.locked && (
+        <View style={[styles.statusTag, {backgroundColor: item.color}]}>
+          <Text style={styles.statusText}>UNLOCKED</Text>
+        </View>
+      )}
     </TouchableOpacity>
   );
+
+  if (loading) {
+      return (
+          <View style={styles.center}><ActivityIndicator size="large" color="#1B5E20" /></View>
+      );
+  }
 
   return (
     <View style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{paddingBottom: 40}}>
-        {/* HEADER SECTION */}
         <View style={styles.headerArea}>
           <View style={styles.headerTextRow}>
             <View>
@@ -88,31 +139,32 @@ export default function CertsScreen() {
               <Text style={styles.headerTitleMain}>Badge Vault 🏆</Text>
             </View>
             <View style={styles.pointsBadge}>
-                <Text style={styles.pointsText}>1,250 pts</Text>
+                <Text style={styles.pointsText}>{userStats.points.toLocaleString()} pts</Text>
             </View>
           </View>
 
           <View style={styles.premiumProgressCard}>
             <View style={styles.progressHeader}>
                <Text style={styles.pLabel}>JOURNEY PROGRESS</Text>
-               <Text style={styles.pValue}>2 / 6</Text>
+               <Text style={styles.pValue}>{badges.filter(b => !b.locked).length} / 6</Text>
             </View>
             <View style={styles.trackBackground}>
-               <View style={[styles.trackFill, { width: '33%' }]} />
+               <View style={[styles.trackFill, { width: `${(badges.filter(b => !b.locked).length / 6) * 100}%` }]} />
             </View>
-            <Text style={styles.progressHint}>4 more badges to become a Legend</Text>
+            <Text style={styles.progressHint}>
+                {6 - badges.filter(b => !b.locked).length} more badges to become a Legend
+            </Text>
           </View>
         </View>
 
-        {/* GRID SECTION */}
         <View style={styles.gridContainer}>
             <FlatList
-            data={BADGES}
-            numColumns={2}
-            renderItem={renderBadge}
-            keyExtractor={item => item.id}
-            scrollEnabled={false}
-            columnWrapperStyle={styles.rowGap}
+                data={badges}
+                numColumns={2}
+                renderItem={renderBadge}
+                keyExtractor={item => item.id}
+                scrollEnabled={false}
+                columnWrapperStyle={styles.rowGap}
             />
         </View>
       </ScrollView>
@@ -133,13 +185,13 @@ export default function CertsScreen() {
               <Text style={styles.certName}>{userName}</Text>
               
               <Text style={styles.certBody}>
-                For extraordinary commitment to environmental sustainability and successfully achieving the milestone:
+                For extraordinary commitment to environmental sustainability and successfully achieving the EcoTrace milestone:
               </Text>
               <Text style={[styles.certBadgeName, {color: selectedBadge?.color}]}>{selectedBadge?.title}</Text>
               
               <View style={styles.signatureRow}>
                 <View style={styles.sigLine}>
-                    <Text style={styles.sigText}>CarbonSync Official</Text>
+                    <Text style={styles.sigText}>EcoTrace Official</Text>
                 </View>
                 <View style={styles.sigLine}>
                     <Text style={styles.sigText}>{new Date().toLocaleDateString()}</Text>
