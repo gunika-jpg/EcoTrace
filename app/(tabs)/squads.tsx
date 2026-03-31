@@ -59,12 +59,14 @@ export default function SquadsScreen() {
     setRefreshing(false);
   }
 
+  // --- MODIFIED FUNCTION ---
   async function fetchLeaderboard(squadId: string) {
     const { data } = await supabase
       .from('squad_members')
       .select('*, users!inner(name, email, total_carbon_score)')
       .eq('squad_id', squadId)
-      .order('weekly_contribution', { ascending: false });
+      // Change: ascending: true puts the lowest carbon score at the top
+      .order('users(total_carbon_score)', { ascending: true });
     if (data) setLeaderboard(data);
   }
 
@@ -107,7 +109,13 @@ export default function SquadsScreen() {
 
   // UI HELPERS
   const totalSquadKg = leaderboard.reduce((acc, m) => acc + (m.users?.total_carbon_score || 0), 0);
-  const maxScore = leaderboard.length > 0 ? Math.max(...leaderboard.map(m => m.users?.total_carbon_score || 0), 1) : 1;
+  
+  // MODIFIED: We still calculate the max score across the group 
+  // so the progress bars show the relative difference between members.
+  const maxScore = leaderboard.length > 0 
+    ? Math.max(...leaderboard.map(m => m.users?.total_carbon_score || 0), 1) 
+    : 1;
+    
   const MEDAL = ['🥇', '🥈', '🥉'];
 
   if (loading) return <View style={styles.center}><ActivityIndicator size="large" color="#4F46E5" /></View>;
