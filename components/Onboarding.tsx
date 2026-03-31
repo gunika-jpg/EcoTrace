@@ -1,13 +1,13 @@
 import React, { useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Dimensions,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Dimensions,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 // 1. IMPORT PLANET (Fixes "Planet not defined")
 import Planet from './Planet';
@@ -67,7 +67,7 @@ export default function Onboarding({ onFinish }: OnboardingProps) {
           >
             {/* Slide 1 */}
             <View style={[styles.slide, { width }]}>
-              <Planet health="good" />
+              <Planet status="good" />
               <Text style={styles.title}>Heal the Earth</Text>
               <Text style={styles.desc}>Your daily choices affect the planet's health.</Text>
             </View>

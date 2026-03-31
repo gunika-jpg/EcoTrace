@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 
-export default function Planet({ health }: { health: 'good' | 'neutral' | 'bad' }) {
+export default function Planet({ status }: { status: 'excellent' | 'good' | 'neutral' | 'poor' }) {
   // 1. Setup the Animation Value
   const floatAnim = useRef(new Animated.Value(0)).current;
 
@@ -11,13 +11,13 @@ export default function Planet({ health }: { health: 'good' | 'neutral' | 'bad' 
     Animated.loop(
       Animated.sequence([
         Animated.timing(floatAnim, {
-          toValue: -10, // Move up 10 units
+          toValue: -10,
           duration: 2500,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
         Animated.timing(floatAnim, {
-          toValue: 0, // Move back down
+          toValue: 0,
           duration: 2500,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
@@ -27,16 +27,18 @@ export default function Planet({ health }: { health: 'good' | 'neutral' | 'bad' 
   }, [floatAnim]);
 
   const colors = {
+    excellent: { water: '#4A90E2', land: '#2D5A27' },
     good: { land: '#2D5A27', water: '#4A90E2' },
     neutral: { land: '#8B9A65', water: '#7BA7BC' },
-    bad: { land: '#5C5C5C', water: '#A9A9A9' },
+    poor: { land: '#5C5C5C', water: '#A9A9A9' },
   };
 
-  const theme = colors[health];
+  // Safety check: Default to 'neutral' if status is undefined
+  const safeStatus = status || 'neutral';
+  const theme = colors[safeStatus as keyof typeof colors] || colors.neutral;
 
   return (
     <View style={{ alignItems: 'center', marginVertical: 20 }}>
-      {/* 3. Wrap the Svg in an Animated.View and apply the transform */}
       <Animated.View style={{ transform: [{ translateY: floatAnim }] }}>
         <Svg height="160" width="160" viewBox="0 0 100 100">
           <Circle cx="50" cy="50" r="48" fill={theme.water} />
@@ -53,3 +55,5 @@ export default function Planet({ health }: { health: 'good' | 'neutral' | 'bad' 
     </View>
   );
 }
+
+

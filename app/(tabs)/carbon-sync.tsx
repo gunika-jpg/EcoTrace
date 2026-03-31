@@ -114,8 +114,12 @@ export default function CarbonSyncScreen() {
   const logData = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { Alert.alert('Error', 'Please log in first!'); return; }
+      if (!user) {
+        Alert.alert('Error', 'Please log in first!');
+        return;
+      }
 
+      // Insert all carbon logs
       for (const item of results) {
         await supabase.from('carbon_logs').insert({
           user_id: user.id,
@@ -127,17 +131,25 @@ export default function CarbonSyncScreen() {
         });
       }
 
+      // Get and update total_carbon_tracked
       const { data: profile } = await supabase
         .from('users')
-        .select('total_carbon_score')
+        .select('total_carbon_tracked')
         .eq('id', user.id)
         .single();
 
-      const newScore = (profile?.total_carbon_score || 0) + parseFloat(totalImpact);
-      await supabase.from('users').update({ total_carbon_score: newScore }).eq('id', user.id);
+      const totalImpact = results.reduce((sum, item) => sum + item.carbonScore, 0);
+      const newTracked = (profile?.total_carbon_tracked || 0) + totalImpact;
 
-      Alert.alert('Success', 'Saved! Pull down on Home to refresh 🌱');
+      await supabase.from('users').update({ total_carbon_tracked: newTracked }).eq('id', user.id);
+
+      Alert.alert('Success! 🌱', `Logged ${totalImpact.toFixed(1)} kg CO₂. Pull down on Home to refresh!`);
+      
+      // Reset form
+      setResults([]);
+      setImage(null);
     } catch (err) {
+      console.error('Error:', err);
       Alert.alert('Error', 'Could not save. Try again.');
     }
   };
@@ -151,7 +163,7 @@ export default function CarbonSyncScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.header}>Carbon-Sync 📸</Text>
-      <Text style={styles.subHeader}>Upload a bill to see your impact</Text>
+      <Text style={styles.subHeader}>Scan a bill to track your carbon footprint</Text>
 
       <TouchableOpacity style={styles.uploadZone} onPress={pickImage}>
         {image ? (
@@ -180,8 +192,13 @@ export default function CarbonSyncScreen() {
               <Text style={styles.itemName}>{item.name}</Text>
               <Text style={styles.itemScore}>{item.carbonScore} kg CO₂</Text>
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <View style={[styles.tag, item.category === 'High' ? styles.tagRed : item.category === 'Medium' ? styles.tagYellow : styles.tagGreen]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={[
+                styles.tag,
+                item.category === 'High' ? styles.tagRed : 
+                item.category === 'Medium' ? styles.tagYellow : 
+                styles.tagGreen
+              ]}>
                 <Text style={styles.tagText}>{item.category}</Text>
               </View>
               <TouchableOpacity onPress={() => deleteItem(item.id)} style={styles.deleteBtn}>
@@ -190,7 +207,8 @@ export default function CarbonSyncScreen() {
             </View>
           </View>
         )}
-        contentContainerStyle={{ paddingBottom: 100, marginTop: 20 }}
+        scrollEnabled={false}
+        contentContainerStyle={{ marginTop: 20 }}
         ListEmptyComponent={() => !loading && image ? (
           <Text style={{ textAlign: 'center', color: '#999', marginTop: 20 }}>No items found in this scan.</Text>
         ) : null}
@@ -214,7 +232,8 @@ export default function CarbonSyncScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, backgroundColor: '#fff' },
   header: { fontSize: 28, fontWeight: 'bold', color: '#1B5E20', marginTop: 40 },
-  subHeader: { fontSize: 16, color: '#666', marginBottom: 20 },
+  subHeader: { fontSize: 14, color: '#666', marginBottom: 20 },
+  
   uploadZone: {
     height: 180,
     borderWidth: 2,
@@ -223,48 +242,39 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F5FAF8',
-    overflow: 'hidden'
+    backgroundColor: '#F0FDF4',
+    marginBottom: 20,
   },
-  uploadText: { color: '#1D9E75', fontSize: 16, marginTop: 10, fontWeight: '500' },
-  previewImage: { width: '100%', height: '100%' },
-  loadingBox: { marginTop: 20, alignItems: 'center' },
-  loadingText: { marginTop: 10, color: '#1D9E75', fontStyle: 'italic' },
-  resultCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 18,
-    backgroundColor: '#fff',
-    borderRadius: 15,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#EEE',
-    elevation: 2,
-    alignItems: 'center'
+  previewImage: { width: '100%', height: '100%', borderRadius: 18 },
+  uploadText: { fontSize: 16, color: '#1D9E75', fontWeight: '600', marginTop: 10 },
+  
+  loadingBox: { backgroundColor: '#E8F5E9', borderRadius: 12, padding: 24, alignItems: 'center', marginBottom: 20 },
+  loadingText: { color: '#1D9E75', marginTop: 12, fontWeight: '500' },
+  
+  resultCard: { backgroundColor: '#F5F5F5', borderRadius: 12, padding: 14, marginBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  itemName: { fontSize: 16, fontWeight: '600', color: '#333' },
+  itemScore: { fontSize: 14, color: '#1D9E75', fontWeight: '500', marginTop: 4 },
+  
+  tag: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
+  tagRed: { backgroundColor: '#FEE2E2' },
+  tagYellow: { backgroundColor: '#FEF3C7' },
+  tagGreen: { backgroundColor: '#DCFCE7' },
+  tagText: { fontSize: 12, fontWeight: '600', color: '#333' },
+  
+  deleteBtn: { padding: 8 },
+  
+  summaryCard: { 
+    backgroundColor: '#1D9E75', 
+    borderRadius: 16, 
+    padding: 16, 
+    marginTop: 20,
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center' 
   },
-  itemName: { fontSize: 16, fontWeight: '600' },
-  itemScore: { fontSize: 13, color: '#888' },
-  tag: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
-  tagRed: { backgroundColor: '#FFEBEE' },
-  tagYellow: { backgroundColor: '#FFFDE7' },
-  tagGreen: { backgroundColor: '#E8F5E9' },
-  tagText: { fontSize: 11, fontWeight: 'bold' },
-  deleteBtn: { marginLeft: 15, padding: 5 },
-  summaryCard: {
-    position: 'absolute',
-    bottom: 20,
-    left: 20,
-    right: 20,
-    padding: 20,
-    backgroundColor: '#1B5E20',
-    borderRadius: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    elevation: 5
-  },
-  summaryLabel: { color: '#E8F5E9', fontSize: 12 },
-  summaryTotal: { color: '#fff', fontSize: 22, fontWeight: 'bold' },
-  saveBtn: { backgroundColor: '#fff', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12 },
-  saveBtnText: { color: '#1B5E20', fontWeight: 'bold' }
+  summaryLabel: { fontSize: 12, color: '#E8F5E9' },
+  summaryTotal: { fontSize: 24, fontWeight: 'bold', color: '#fff', marginTop: 4 },
+  
+  saveBtn: { backgroundColor: '#fff', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 },
+  saveBtnText: { color: '#1D9E75', fontWeight: '700', fontSize: 14 },
 });
