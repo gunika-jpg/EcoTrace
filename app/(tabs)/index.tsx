@@ -1,3 +1,4 @@
+import CommunityPool from '@/components/CommunityPool'; // Ensure this file exists in /components
 import Planet from '@/components/Planet';
 import { supabase } from '@/lib/supabase';
 import React, { useEffect, useState } from 'react';
@@ -30,12 +31,9 @@ export default function HomeScreen() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Promise.all runs these queries simultaneously for speed
       const [prof, logsData, scanCount, questsData, userQuestsData] = await Promise.all([
         supabase.from('users').select('*').eq('id', user.id).single(),
-        // We limit this to 5 for the "Recent Activity" list display
         supabase.from('carbon_logs').select('*').eq('user_id', user.id).order('logged_at', { ascending: false }).limit(5),
-        // We get the ACTUAL total count for the stat box
         supabase.from('carbon_logs').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
         supabase.from('quests').select('*').eq('is_active', true).limit(4),
         supabase.from('user_quests').select('quest_id').eq('user_id', user.id).eq('status', 'completed'),
@@ -237,6 +235,9 @@ export default function HomeScreen() {
         )}
       </View>
 
+      {/* Community Pool Card - Placed exactly below Quests */}
+      <CommunityPool />
+
       {/* Recent Activity */}
       <Text style={styles.sectionTitle}>Recent Activity</Text>
       {logs.length > 0 ? (
@@ -258,19 +259,16 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff', paddingHorizontal: 16 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 20, marginBottom: 20 },
   greeting: { fontSize: 26, fontWeight: 'bold', color: '#1B5E20' },
   headerSub: { fontSize: 14, color: '#666' },
   signOutBtn: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#E8F5E9', borderRadius: 8 },
   signOutText: { color: '#1D9E75', fontWeight: '600', fontSize: 12 },
-  
   planetCard: { backgroundColor: '#E8F5E9', borderRadius: 24, padding: 24, alignItems: 'center', marginBottom: 20 },
   planetStatus: { fontSize: 18, fontWeight: '700', color: '#1B5E20', marginTop: 12 },
   progressBg: { width: '100%', height: 10, backgroundColor: '#D1F2EB', borderRadius: 5, marginTop: 20, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 5 },
   progressLabel: { fontSize: 12, color: '#666', marginTop: 8, fontWeight: '500' },
-  
   statsRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, marginBottom: 20 },
   statCard: { 
     flex: 1, 
@@ -284,9 +282,8 @@ const styles = StyleSheet.create({
   },
   statNum: { fontSize: 18, fontWeight: 'bold', color: '#1D9E75' },
   statLabel: { fontSize: 10, color: '#888', marginTop: 4, fontWeight: '600', textTransform: 'uppercase' },
-  
   sectionTitle: { fontSize: 16, fontWeight: '700', color: '#1B5E20', marginBottom: 12, marginTop: 20 },
-  questContainer: { marginBottom: 20 },
+  questContainer: { marginBottom: 10 },
   questCard: { backgroundColor: '#F0FDF4', borderLeftWidth: 4, borderLeftColor: '#1D9E75', borderRadius: 12, padding: 14, marginBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   questCardCompleted: { opacity: 0.6, backgroundColor: '#E8F5E9' },
   questContent: { flex: 1 },
@@ -296,7 +293,6 @@ const styles = StyleSheet.create({
   questPoints: { fontSize: 12, fontWeight: '700', color: '#fff' },
   questSaving: { fontSize: 10, color: '#E8F5E9', marginTop: 2 },
   noData: { color: '#999', textAlign: 'center', paddingVertical: 12 },
-  
   logRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
   logName: { fontSize: 14, color: '#333', fontWeight: '500' },
   logVal: { fontSize: 14, color: '#DC2626', fontWeight: '600' },
