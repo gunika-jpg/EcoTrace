@@ -1,86 +1,341 @@
-import { supabase } from '@/lib/supabase';
+import { utilityBills } from '@/lib/db';
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+
+interface CommunityStats {
+  totalEnergyCarbon: number;
+  totalPotentialSavings: number;
+  totalTreesPlantable: number;
+  totalSavingsINR: number;
+}
 
 export default function CommunityPool() {
-  const [totalPool, setTotalPool] = useState(0);
+  const [stats, setStats] = useState<CommunityStats>({
+    totalEnergyCarbon: 0,
+    totalPotentialSavings: 0,
+    totalTreesPlantable: 0,
+    totalSavingsINR: 0,
+  });
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    fetchCommunityTotal();
+    init();
   }, []);
 
-  async function fetchCommunityTotal() {
-    // Summing up carbon prevented from ALL users
-    const { data } = await supabase
-      .from('users')
-      .select('total_carbon_prevented');
+  async function init() {
+    try {
+      const [energyCarbon, savingsData] = await Promise.all([
+        utilityBills.getCommunityBillCarbon(),
+        utilityBills.getCommunityPotentialSavings(),
+      ]);
 
-    if (data) {
-      const total = data.reduce((sum, user) => sum + (user.total_carbon_prevented || 0), 0);
-      setTotalPool(total);
+      setStats({
+        totalEnergyCarbon: energyCarbon,
+        totalPotentialSavings: savingsData.total_savings_co2,
+        totalTreesPlantable: savingsData.trees_that_can_be_planted,
+        totalSavingsINR: savingsData.total_savings_inr,
+      });
+    } catch (error) {
+      console.error('Error loading community pool:', error);
+    } finally {
+      setLoading(false);
     }
   }
 
-  // 1 tree funded for every 20kg prevented (standard estimate)
-  const treesFunded = Math.floor(totalPool / 20);
+  async function onRefresh() {
+    setRefreshing(true);
+    await init();
+    setRefreshing(false);
+  }
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color="#1D9E75" />
+      </View>
+    );
+  }
 
   return (
-    <View style={styles.card}>
-      <View style={styles.headerRow}>
-        <Text style={styles.emoji}>🌲</Text>
-        <Text style={styles.headerText}>Community Pool</Text>
+    <ScrollView
+      style={styles.container}
+      scrollEnabled={false}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1D9E75" />}
+    >
+      {/* Main Community Pool Card */}
+      <View style={styles.poolCard}>
+        <Text style={styles.poolIcon}>🌳</Text>
+        <Text style={styles.poolTitle}>Community Pool</Text>
+        
+        <View style={styles.mainMetric}>
+          <Text style={styles.mainLabel}>Energy Carbon Tracked</Text>
+          <Text style={styles.mainValue}>{stats.totalEnergyCarbon.toFixed(1)} kg CO₂</Text>
+        </View>
+
+        <View style={styles.divider} />
+
+        {/* Stats Grid */}
+        <View style={styles.statsGrid}>
+          {/* Potential Savings */}
+          <View style={styles.statBox}>
+            <Text style={styles.statLabel}>Potential Savings</Text>
+            <Text style={styles.statValue}>{stats.totalPotentialSavings.toFixed(1)}</Text>
+            <Text style={styles.statUnit}>kg CO₂</Text>
+            <View style={styles.savingsAmountBox}>
+              <Text style={styles.savingsText}>₹{Math.floor(stats.totalSavingsINR).toLocaleString()}</Text>
+            </View>
+          </View>
+
+          {/* Trees Plantable */}
+          <View style={styles.statBox}>
+            <Text style={styles.statLabel}>Trees Funded</Text>
+            <Text style={styles.statValue}>{stats.totalTreesPlantable}</Text>
+            <Text style={styles.statUnit}>🌱 trees</Text>
+            <View style={styles.treePartnerBox}>
+              <Text style={styles.partnerText}>SankalpTaru</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Insights Section */}
+        <View style={styles.insightsBox}>
+          <Text style={styles.insightsTitle}>💡 Community Impact</Text>
+          <View style={styles.insightRow}>
+            <Text style={styles.insightText}>
+              ✅ The community has tracked {stats.totalEnergyCarbon.toFixed(0)} kg CO₂ from electricity bills
+            </Text>
+          </View>
+          <View style={styles.insightRow}>
+            <Text style={styles.insightText}>
+              💚 By following savings plans, we can prevent {stats.totalPotentialSavings.toFixed(0)} kg more CO₂
+            </Text>
+          </View>
+          <View style={styles.insightRow}>
+            <Text style={styles.insightText}>
+              🌍 This equals planting {stats.totalTreesPlantable} trees through SankalpTaru Foundation partnership
+            </Text>
+          </View>
+        </View>
+
+        {/* NGO Partnership */}
+        <View style={styles.ngoCard}>
+          <Text style={styles.ngoTitle}>🤝 Partnership</Text>
+          <Text style={styles.ngoName}>SankalpTaru Foundation</Text>
+          <Text style={styles.ngoDesc}>
+            1 tree planted for every 20 kg CO₂ saved through energy efficiency initiatives
+          </Text>
+          <View style={styles.ngoStats}>
+            <View style={styles.ngoStat}>
+              <Text style={styles.ngoStatValue}>{stats.totalTreesPlantable}</Text>
+              <Text style={styles.ngoStatLabel}>Trees</Text>
+            </View>
+            <View style={styles.ngoStat}>
+              <Text style={styles.ngoStatValue}>{Math.floor(stats.totalSavingsINR / 100)}</Text>
+              <Text style={styles.ngoStatLabel}>Contributions</Text>
+            </View>
+          </View>
+        </View>
       </View>
-      
-      <Text style={styles.poolValue}>{totalPool.toFixed(1)} kg</Text>
-      
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>
-          Trees funded: <Text style={styles.bold}>{treesFunded}</Text> 🌲
-        </Text>
-        <Text style={styles.subText}>SankalpTaru Foundation Partnership</Text>
-      </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: '#0F172A', // Dark navy background
+  container: {
+    marginVertical: 16,
+    paddingHorizontal: 0,
+  },
+  
+  poolCard: {
+    backgroundColor: '#FFF',
     borderRadius: 20,
     padding: 20,
-    marginTop: 10,
-    marginBottom: 20,
+    marginHorizontal: 16,
+    elevation: 2,
+    borderLeftWidth: 5,
+    borderLeftColor: '#1D9E75',
   },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+
+  poolIcon: {
+    fontSize: 32,
     marginBottom: 8,
   },
-  emoji: { fontSize: 14, marginRight: 6 },
-  headerText: {
-    color: '#F8FAFC',
-    fontSize: 14,
+
+  poolTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#1B5E20',
+    marginBottom: 16,
+  },
+
+  mainMetric: {
+    marginBottom: 16,
+  },
+
+  mainLabel: {
+    fontSize: 12,
+    color: '#999',
     fontWeight: '600',
+    textTransform: 'uppercase',
+    marginBottom: 4,
   },
-  poolValue: {
-    color: '#22C55E', // Bright green for the kg value
-    fontSize: 32,
-    fontWeight: 'bold',
-    marginBottom: 12,
+
+  mainValue: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#1D9E75',
   },
-  footer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+
+  divider: {
+    height: 1,
+    backgroundColor: '#E5E7EB',
+    marginVertical: 12,
+  },
+
+  statsGrid: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+
+  statBox: {
+    flex: 1,
+    backgroundColor: '#F3F4F6',
     borderRadius: 12,
     padding: 12,
+    alignItems: 'center',
   },
-  footerText: {
-    color: '#F8FAFC',
-    fontSize: 14,
+
+  statLabel: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    marginBottom: 4,
   },
-  bold: { fontWeight: 'bold' },
-  subText: {
-    color: '#94A3B8',
+
+  statValue: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#1B5E20',
+    marginBottom: 2,
+  },
+
+  statUnit: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+    marginBottom: 8,
+  },
+
+  savingsAmountBox: {
+    backgroundColor: '#E8F5E9',
+    borderRadius: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+
+  savingsText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1B5E20',
+  },
+
+  treePartnerBox: {
+    backgroundColor: '#E8F5E9',
+    borderRadius: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+
+  partnerText: {
     fontSize: 10,
-    marginTop: 2,
+    fontWeight: '600',
+    color: '#1B5E20',
+  },
+
+  insightsBox: {
+    backgroundColor: '#FFF8E1',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: '#EF9F27',
+  },
+
+  insightsTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1B5E20',
+    marginBottom: 8,
+  },
+
+  insightRow: {
+    marginBottom: 8,
+  },
+
+  insightText: {
+    fontSize: 12,
+    color: '#555',
+    lineHeight: 18,
+    fontWeight: '500',
+  },
+
+  ngoCard: {
+    backgroundColor: '#E8F5E9',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#1D9E75',
+  },
+
+  ngoTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1B5E20',
+    marginBottom: 4,
+  },
+
+  ngoName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1B5E20',
+    marginBottom: 4,
+  },
+
+  ngoDesc: {
+    fontSize: 11,
+    color: '#555',
+    lineHeight: 16,
+    marginBottom: 12,
+  },
+
+  ngoStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+
+  ngoStat: {
+    alignItems: 'center',
+  },
+
+  ngoStatValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#1D9E75',
+  },
+
+  ngoStatLabel: {
+    fontSize: 10,
+    color: '#9CA3AF',
+    fontWeight: '600',
   },
 });

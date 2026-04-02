@@ -213,36 +213,73 @@ export default function CarbonSyncScreen() {
   };
 
   const logBillData = async () => {
-    if (!billResult) return;
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { Alert.alert('Error', 'Please log in first!'); return; }
-
-      await supabase.from('carbon_logs').insert({
-        user_id: user.id,
-        item_name: `${billResult.bill_type} bill - ${billResult.billing_period}`,
-        carbon_value: billResult.carbon_kg,
-        category: 'energy',
-        source: 'Gemini AI',
-        raw_data: JSON.stringify(billResult),
-      });
-
-      const { data: billProfile } = await supabase
-        .from('users')
-        .select('total_carbon_tracked, total_carbon_score')
-        .eq('id', user.id)
-        .single();
-
-      await supabase.from('users').update({
-        total_carbon_tracked: (billProfile?.total_carbon_tracked || 0) + billResult.carbon_kg,
-        total_carbon_score: (billProfile?.total_carbon_score || 0) + billResult.carbon_kg,
-      }).eq('id', user.id);
-
-      Alert.alert('Success', 'Bill analysis saved! Pull down on Home to refresh 🌱');
-    } catch (err) {
-      Alert.alert('Error', 'Could not save. Try again.');
+  if (!billResult) return;
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      Alert.alert('Error', 'Please log in first!');
+      return;
     }
-  };
+
+    // 1. Save bill data to carbon_logs
+    await supabase.from('carbon_logs').insert({
+      user_id: user.id,
+      item_name: `${billResult.bill_type} bill - ${billResult.billing_period}`,
+      carbon_value: billResult.carbon_kg,
+      category: 'energy',
+      source: 'Electricity Bill Scanner',
+      raw_data: JSON.stringify(billResult),
+    });
+
+    // 2. Calculate prevented carbon from savings plan
+    const totalPreventedCO2 = billResult.savings_plan.reduce(
+      (sum: number, step: any) => sum + (step.saves_co2_kg_per_month || 0),
+      0
+    );
+
+    // 3. Get current user stats
+    const { data: billProfile } = await supabase
+      .from('users')
+      .select('total_carbon_tracked, total_carbon_prevented, total_carbon_score')
+      .eq('id', user.id)
+      .single();
+
+    // 4. Update user stats
+    await supabase.from('users').update({
+      total_carbon_tracked: (billProfile?.total_carbon_tracked || 0) + billResult.carbon_kg,
+      total_carbon_prevented: (billProfile?.total_carbon_prevented || 0) + totalPreventedCO2,
+      total_carbon_score: (billProfile?.total_carbon_score || 0) + billResult.carbon_kg,
+    }).eq('id', user.id);
+
+    // 5. Try to save bill analysis (if table exists)
+    try {
+      await supabase.from('bill_analysis').insert({
+        user_id: user.id,
+        bill_type: billResult.bill_type,
+        billing_period: billResult.billing_period,
+        usage_amount: billResult.usage_amount,
+        carbon_kg: billResult.carbon_kg,
+        potential_savings_co2: totalPreventedCO2,
+        potential_savings_inr: billResult.projected_annual_saving_inr,
+        analyzed_at: new Date().toISOString(),
+      });
+    } catch (tableError) {
+      console.log('Bill analysis table not available yet');
+    }
+
+    Alert.alert(
+      'Success! 🎉',
+      `✅ Bill Data Saved!\n\n📊 Carbon Tracked: ${billResult.carbon_kg.toFixed(1)} kg\n💚 Potential Savings: ${totalPreventedCO2.toFixed(1)} kg\n\nPull down on Home to see the updates!`
+    );
+
+    // Reset form
+    setBillResult(null);
+    setImage(null);
+  } catch (err) {
+    console.error('Error logging bill:', err);
+    Alert.alert('Error', 'Could not save bill data. Try again.');
+  }
+};
 
   return (
     <View style={styles.container}>
