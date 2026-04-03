@@ -65,7 +65,7 @@ Respond ONLY with this exact JSON format, no other text:
 }`;
 
 export default function CarbonSyncScreen() {
-  const [mode, setMode] = useState<'receipt' | 'bill'>('receipt');
+  const [mode, setMode] = useState<'receipt' | 'bill' | 'barcode'>('receipt');
   const [image, setImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<ScannedItem[]>([]);
@@ -89,7 +89,10 @@ export default function CarbonSyncScreen() {
       setImage(result.assets[0].uri);
       setResults([]);
       setBillResult(null);
-      if (mode === 'receipt') {
+
+      if (mode === 'barcode') {
+        startBarcodeScan(result.assets[0].uri); // Naya function
+      } else if (mode === 'receipt') {
         startReceiptScan(result.assets[0].uri);
       } else {
         startBillScan(result.assets[0].uri);
@@ -168,6 +171,34 @@ export default function CarbonSyncScreen() {
       Alert.alert('Error', 'Failed to analyze bill. Please try again.');
     }
     setLoading(false);
+  };
+
+const startBarcodeScan = async (imageUri: string) => {
+    setLoading(true);
+    
+    
+    setTimeout(() => {
+      const demoPool = [
+        { name: "Organic Oat Milk", score: 0.9, cat: 'Low' },  // demo values
+        { name: "Lays chips", score: 14.2, cat: 'High' },
+        { name: "Plastic Soda Bottle", score: 2.1, cat: 'Medium' },
+        { name: "Greek Yogurt", score: 3.5, cat: 'Medium' },
+        { name: "Tea Leaves", score: 5.8, cat: 'Low' }
+      ];
+      
+      
+      const randomItem = demoPool[Math.floor(Math.random() * demoPool.length)];
+
+      const barcodeResult: ScannedItem = {
+        id: Date.now().toString(),
+        name: randomItem.name,
+        carbonScore: randomItem.score,
+        category: randomItem.cat as any
+      };
+
+      setResults([barcodeResult]);
+      setLoading(false);
+    }, 4000); // 
   };
 
   const deleteItem = (id: string) => {
@@ -297,6 +328,12 @@ export default function CarbonSyncScreen() {
         >
           <Text style={[styles.toggleText, mode === 'bill' && styles.toggleTextActive]}>⚡ Bill</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.toggleBtn, mode === 'barcode' && styles.toggleActive]}
+          onPress={() => { setMode('barcode'); setImage(null); setResults([]); setBillResult(null); }}
+        >
+          <Text style={[styles.toggleText, mode === 'barcode' && styles.toggleTextActive]}>🔍 Barcode</Text>
+        </TouchableOpacity>
       </View>
 
       <Text style={styles.header}>Carbon-Sync 📸</Text>
@@ -311,7 +348,11 @@ export default function CarbonSyncScreen() {
           <View style={{ alignItems: 'center' }}>
             <Ionicons name="camera-outline" size={50} color="#1D9E75" />
             <Text style={styles.uploadText}>
-              {mode === 'receipt' ? 'Tap to Scan Receipt' : 'Tap to Upload Bill'}
+                {mode === 'receipt' 
+                  ? 'Tap to Scan Receipt' 
+                  : mode === 'barcode' 
+                    ? 'Tap to Upload Barcode' 
+                    : 'Tap to Upload Bill'}
             </Text>
           </View>
         )}
@@ -327,7 +368,7 @@ export default function CarbonSyncScreen() {
       )}
 
       {/* RECEIPT RESULTS */}
-      {mode === 'receipt' && (
+      {(mode === 'receipt' || mode === 'barcode') &&(
         <FlatList
           data={results}
           keyExtractor={(item) => item.id}
