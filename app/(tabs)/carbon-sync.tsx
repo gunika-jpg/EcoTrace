@@ -173,32 +173,25 @@ export default function CarbonSyncScreen() {
     setLoading(false);
   };
 
-const startBarcodeScan = async (imageUri: string) => {
+  const startBarcodeScan = async (imageUri: string) => {
     setLoading(true);
-    
-    
-    setTimeout(() => {
-      const demoPool = [
-        { name: "Organic Oat Milk", score: 0.9, cat: 'Low' },  // demo values
-        { name: "Lays chips", score: 14.2, cat: 'High' },
-        { name: "Plastic Soda Bottle", score: 2.1, cat: 'Medium' },
-        { name: "Greek Yogurt", score: 3.5, cat: 'Medium' },
-        { name: "Tea Leaves", score: 5.8, cat: 'Low' }
-      ];
+    try {
+      const base64 = await getBase64(imageUri);
+      const BARCODE_PROMPT = `Identify the product in this image. Extract its name and estimate carbon footprint in kg CO2. Classify as High, Medium, or Low. Respond ONLY with JSON: {"name": "item name", "carbonScore": 1.2, "category": "Low"}`;
       
-      
-      const randomItem = demoPool[Math.floor(Math.random() * demoPool.length)];
-
-      const barcodeResult: ScannedItem = {
+      const parsed = await callGemini(base64, BARCODE_PROMPT);
+      const newResult: ScannedItem = {
         id: Date.now().toString(),
-        name: randomItem.name,
-        carbonScore: randomItem.score,
-        category: randomItem.cat as any
+        name: parsed.name,
+        carbonScore: parsed.carbonScore,
+        category: parsed.category
       };
-
-      setResults([barcodeResult]);
-      setLoading(false);
-    }, 4000); // 
+      setResults([newResult]);
+    } catch (error) {
+      console.error('Barcode error:', error);
+      Alert.alert('Error', 'Product not Identified. Please try again with a clearer image or different product.');
+    }
+    setLoading(false);
   };
 
   const deleteItem = (id: string) => {
@@ -348,11 +341,11 @@ const startBarcodeScan = async (imageUri: string) => {
           <View style={{ alignItems: 'center' }}>
             <Ionicons name="camera-outline" size={50} color="#1D9E75" />
             <Text style={styles.uploadText}>
-                {mode === 'receipt' 
-                  ? 'Tap to Scan Receipt' 
-                  : mode === 'barcode' 
-                    ? 'Tap to Upload Barcode' 
-                    : 'Tap to Upload Bill'}
+              {mode === 'receipt' 
+                ? 'Tap to Scan Receipt' 
+                : mode === 'barcode' 
+                  ? 'Tap to Upload Barcode' 
+                  : 'Tap to Upload Bill'}
             </Text>
           </View>
         )}
