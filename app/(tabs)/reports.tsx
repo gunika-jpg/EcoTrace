@@ -1,11 +1,14 @@
+import ClimateBackdrop from '@/components/ClimateBackdrop';
 import { carbonReports } from '@/lib/db';
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
+    Animated,
     Dimensions,
+    Easing,
     RefreshControl,
     ScrollView,
     Share,
@@ -25,10 +28,21 @@ export default function ReportsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'weekly' | 'monthly'>('weekly');
+  const enterAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     init();
   }, []);
+
+  useEffect(() => {
+    enterAnim.setValue(0);
+    Animated.timing(enterAnim, {
+      toValue: 1,
+      duration: 450,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [activeTab, enterAnim]);
 
   async function init() {
     try {
@@ -104,10 +118,18 @@ export default function ReportsScreen() {
   const previousValue = activeTab === 'weekly' ? report?.previousWeek : report?.previousMonth;
 
   return (
-    <ScrollView
-      style={styles.container}
+    <View style={styles.container}>
+      <ClimateBackdrop variant="ocean" />
+
+      <ScrollView
+      style={styles.scroll}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1D9E75" />}
     >
+      <View style={styles.reportMission}>
+        <Text style={styles.reportMissionTitle}>Purpose</Text>
+        <Text style={styles.reportMissionText}>Convert your habits into carbon trends you can improve weekly.</Text>
+      </View>
+
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>📊 Carbon Reports</Text>
@@ -137,7 +159,19 @@ export default function ReportsScreen() {
       {/* Main Report Card */}
       {report ? (
         <>
-          <View style={styles.reportCard}>
+          <Animated.View
+            style={[
+              styles.reportCard,
+              {
+                opacity: enterAnim,
+                transform: [
+                  {
+                    translateY: enterAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }),
+                  },
+                ],
+              },
+            ]}
+          >
             {/* Status Badge */}
             <View style={[styles.statusBadge, report.isImprovement ? styles.badgeGood : styles.badgeNeutral]}>
               <Text style={styles.badgeEmoji}>{report.isImprovement ? '🎉' : '📊'}</Text>
@@ -179,7 +213,7 @@ export default function ReportsScreen() {
               <Ionicons name="share-social" size={20} color="#fff" />
               <Text style={styles.shareBtnText}>Share Report</Text>
             </TouchableOpacity>
-          </View>
+          </Animated.View>
 
           {/* Insights */}
           <View style={styles.insightsCard}>
@@ -279,11 +313,26 @@ export default function ReportsScreen() {
 
       <View style={{ height: 40 }} />
     </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9FAFB' },
+  scroll: { flex: 1 },
+  reportMission: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 6,
+    borderRadius: 16,
+    backgroundColor: 'rgba(26,88,118,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(26,88,118,0.25)',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  reportMissionTitle: { color: '#1A5876', fontWeight: '900', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.6 },
+  reportMissionText: { color: '#2E6078', marginTop: 2, fontSize: 12, fontWeight: '600' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F9FAFB' },
 
   header: { paddingHorizontal: 16, paddingTop: 20, marginBottom: 20 },
@@ -291,12 +340,12 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 14, color: '#666' },
 
   tabContainer: { flexDirection: 'row', paddingHorizontal: 16, marginBottom: 20, gap: 10 },
-  tab: { flex: 1, paddingVertical: 12, paddingHorizontal: 16, borderRadius: 12, backgroundColor: '#FFF', borderWidth: 2, borderColor: '#E5E7EB' },
+  tab: { flex: 1, paddingVertical: 12, paddingHorizontal: 16, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.85)', borderWidth: 2, borderColor: '#E5E7EB' },
   tabActive: { backgroundColor: '#1D9E75', borderColor: '#1D9E75' },
   tabText: { fontSize: 14, fontWeight: '600', color: '#666', textAlign: 'center' },
   tabTextActive: { color: '#FFF' },
 
-  reportCard: { marginHorizontal: 16, backgroundColor: '#FFF', borderRadius: 20, padding: 20, marginBottom: 16, elevation: 3 },
+  reportCard: { marginHorizontal: 16, backgroundColor: 'rgba(255,255,255,0.88)', borderRadius: 20, padding: 20, marginBottom: 16, elevation: 3, borderWidth: 1, borderColor: 'rgba(255,255,255,0.92)' },
 
   statusBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, marginBottom: 16, alignSelf: 'flex-start' },
   badgeGood: { backgroundColor: '#D1FAE5' },
@@ -322,12 +371,12 @@ const styles = StyleSheet.create({
   shareBtn: { flexDirection: 'row', backgroundColor: '#1D9E75', paddingVertical: 12, paddingHorizontal: 16, borderRadius: 12, alignItems: 'center', justifyContent: 'center', gap: 8 },
   shareBtnText: { color: '#FFF', fontWeight: '700', fontSize: 14 },
 
-  insightsCard: { marginHorizontal: 16, backgroundColor: '#FFF', borderRadius: 16, padding: 16, marginBottom: 16, borderLeftWidth: 4, borderLeftColor: '#1D9E75' },
+  insightsCard: { marginHorizontal: 16, backgroundColor: 'rgba(255,255,255,0.86)', borderRadius: 16, padding: 16, marginBottom: 16, borderLeftWidth: 4, borderLeftColor: '#1D9E75' },
   insightsTitle: { fontSize: 16, fontWeight: '700', color: '#1B5E20', marginBottom: 12 },
   insightRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 12 },
   insightText: { flex: 1, fontSize: 13, color: '#4B5563', lineHeight: 20 },
 
-  chartCard: { marginHorizontal: 16, backgroundColor: '#FFF', borderRadius: 16, padding: 16, marginBottom: 16 },
+  chartCard: { marginHorizontal: 16, backgroundColor: 'rgba(255,255,255,0.86)', borderRadius: 16, padding: 16, marginBottom: 16 },
   chartTitle: { fontSize: 16, fontWeight: '700', color: '#1B5E20', marginBottom: 16 },
   chartContainer: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'flex-end', height: 200 },
   barWrapper: { alignItems: 'center', flex: 1 },
@@ -336,7 +385,7 @@ const styles = StyleSheet.create({
   barValue: { fontSize: 11, fontWeight: '600', color: '#1F2937' },
   dayLabel: { fontSize: 11, color: '#9CA3AF', marginTop: 8, fontWeight: '500' },
 
-  tipsCard: { marginHorizontal: 16, backgroundColor: '#FFF', borderRadius: 16, padding: 16, marginBottom: 16 },
+  tipsCard: { marginHorizontal: 16, backgroundColor: 'rgba(255,255,255,0.86)', borderRadius: 16, padding: 16, marginBottom: 16 },
   tipsTitle: { fontSize: 16, fontWeight: '700', color: '#1B5E20', marginBottom: 12 },
   tipItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 14, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
   tipIcon: { fontSize: 24, marginRight: 12 },

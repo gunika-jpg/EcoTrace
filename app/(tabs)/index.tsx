@@ -1,4 +1,5 @@
 import CommunityPool from '@/components/CommunityPool'; // Ensure this file exists in /components
+import ClimateBackdrop from '@/components/ClimateBackdrop';
 
 import Planet from '@/components/Planet';
 
@@ -7,21 +8,20 @@ import { supabase } from '@/lib/supabase';
 import React, { useEffect, useState } from 'react';
 
 import {
-  ActivityIndicator,
+    ActivityIndicator,
+    Alert,
 
-  Alert,
+    RefreshControl,
 
-  RefreshControl,
+    ScrollView,
 
-  ScrollView,
+    StyleSheet,
 
-  StyleSheet,
+    Text,
 
-  Text,
+    TouchableOpacity,
 
-  TouchableOpacity,
-
-  View
+    View
 } from 'react-native';
 
 
@@ -49,8 +49,6 @@ export default function HomeScreen() {
     init();
 
   }, []);
-
-
 
   async function init() {
 
@@ -288,15 +286,23 @@ export default function HomeScreen() {
 
   return (
 
-    <ScrollView
+    <View style={styles.container}>
+      <ClimateBackdrop variant="forest" />
 
-      style={styles.container}
+      <ScrollView
 
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1D9E75" />}
+        style={styles.scroll}
 
-    >
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1D9E75" />}
+
+      >
 
       {/* Header */}
+
+      <View style={styles.missionStrip}>
+        <Text style={styles.missionTitle}>Climate Mission</Text>
+        <Text style={styles.missionText}>Small daily decisions -> measurable carbon impact</Text>
+      </View>
 
       <View style={styles.header}>
 
@@ -504,7 +510,8 @@ export default function HomeScreen() {
 
       <View style={{ height: 40 }} />
 
-    </ScrollView>
+      </ScrollView>
+    </View>
 
   );
 
@@ -514,7 +521,20 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
 
-  container: { flex: 1, backgroundColor: '#fff', paddingHorizontal: 16 },
+  container: { flex: 1, backgroundColor: '#fff' },
+  scroll: { flex: 1, paddingHorizontal: 16 },
+  missionStrip: {
+    marginTop: 14,
+    marginBottom: 6,
+    borderRadius: 16,
+    backgroundColor: 'rgba(13,90,70,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(13,90,70,0.2)',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  missionTitle: { color: '#0D5A46', fontWeight: '900', fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5 },
+  missionText: { color: '#245A4D', marginTop: 2, fontSize: 12, fontWeight: '600' },
 
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
@@ -524,11 +544,11 @@ const styles = StyleSheet.create({
 
   headerSub: { fontSize: 14, color: '#666' },
 
-  signOutBtn: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#E8F5E9', borderRadius: 8 },
+  signOutBtn: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: 'rgba(232,245,233,0.92)', borderRadius: 8 },
 
   signOutText: { color: '#1D9E75', fontWeight: '600', fontSize: 12 },
 
-  planetCard: { backgroundColor: '#E8F5E9', borderRadius: 24, padding: 24, alignItems: 'center', marginBottom: 20 },
+  planetCard: { backgroundColor: 'rgba(232,245,233,0.9)', borderRadius: 24, padding: 24, alignItems: 'center', marginBottom: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)' },
 
   planetStatus: { fontSize: 18, fontWeight: '700', color: '#1B5E20', marginTop: 12 },
 
@@ -544,7 +564,7 @@ const styles = StyleSheet.create({
 
     flex: 1,
 
-    backgroundColor: '#F8F9FA',
+    backgroundColor: 'rgba(255,255,255,0.86)',
 
     borderRadius: 16,
 
@@ -568,7 +588,7 @@ const styles = StyleSheet.create({
 
   questContainer: { marginBottom: 10 },
 
-  questCard: { backgroundColor: '#F0FDF4', borderLeftWidth: 4, borderLeftColor: '#1D9E75', borderRadius: 12, padding: 14, marginBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  questCard: { backgroundColor: 'rgba(240,253,244,0.9)', borderLeftWidth: 4, borderLeftColor: '#1D9E75', borderRadius: 12, padding: 14, marginBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
 
   questCardCompleted: { opacity: 0.6, backgroundColor: '#E8F5E9' },
 
@@ -586,7 +606,7 @@ const styles = StyleSheet.create({
 
   noData: { color: '#999', textAlign: 'center', paddingVertical: 12 },
 
-  logRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
+  logRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f0f0f0', backgroundColor: 'rgba(255,255,255,0.6)', borderRadius: 8, paddingHorizontal: 10, marginBottom: 4 },
 
   logName: { fontSize: 14, color: '#333', fontWeight: '500' },
 

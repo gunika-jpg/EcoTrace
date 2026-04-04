@@ -1,8 +1,10 @@
+import ClimateBackdrop from '@/components/ClimateBackdrop';
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import React, { useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Animated, Easing, FlatList, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface ScannedItem {
   id: string;
@@ -70,6 +72,30 @@ export default function CarbonSyncScreen() {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<ScannedItem[]>([]);
   const [billResult, setBillResult] = useState<BillResult | null>(null);
+  const scanLine = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!loading) {
+      scanLine.stopAnimation();
+      scanLine.setValue(0);
+      return;
+    }
+
+    const loop = Animated.loop(
+      Animated.timing(scanLine, {
+        toValue: 1,
+        duration: 1200,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: true,
+      })
+    );
+
+    loop.start();
+
+    return () => {
+      loop.stop();
+    };
+  }, [loading, scanLine]);
 
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -307,6 +333,20 @@ export default function CarbonSyncScreen() {
 
   return (
     <View style={styles.container}>
+      <ClimateBackdrop variant="forest" />
+
+      <LinearGradient colors={['#0D5A46', '#1D9E75']} style={styles.heroCard}>
+        <Text style={styles.header}>Carbon-Sync</Text>
+        <Text style={styles.subHeader}>
+          {mode === 'receipt' ? 'Snap receipts and track grocery carbon instantly' : mode === 'barcode' ? 'Identify products from barcode images' : 'Analyze electricity and water bills with AI'}
+        </Text>
+        <View style={styles.purposeRow}>
+          <View style={styles.purposePill}><Text style={styles.purposeText}>Track</Text></View>
+          <View style={styles.purposePill}><Text style={styles.purposeText}>Prevent</Text></View>
+          <View style={styles.purposePill}><Text style={styles.purposeText}>Act</Text></View>
+        </View>
+      </LinearGradient>
+
       {/* Mode Toggle */}
       <View style={styles.toggleRow}>
         <TouchableOpacity
@@ -329,14 +369,32 @@ export default function CarbonSyncScreen() {
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.header}>Carbon-Sync 📸</Text>
-      <Text style={styles.subHeader}>
-        {mode === 'receipt' ? 'Upload a grocery receipt' : 'Upload your electricity or water bill'}
-      </Text>
-
       <TouchableOpacity style={styles.uploadZone} onPress={pickImage}>
+        <LinearGradient
+          colors={['rgba(29,158,117,0.08)', 'rgba(255,255,255,0.6)']}
+          style={styles.uploadGradient}
+        />
         {image ? (
-          <Image source={{ uri: image }} style={styles.previewImage} />
+          <>
+            <Image source={{ uri: image }} style={styles.previewImage} />
+            {loading && (
+              <Animated.View
+                style={[
+                  styles.scanLine,
+                  {
+                    transform: [
+                      {
+                        translateY: scanLine.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [-70, 70],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              />
+            )}
+          </>
         ) : (
           <View style={{ alignItems: 'center' }}>
             <Ionicons name="camera-outline" size={50} color="#1D9E75" />
@@ -473,38 +531,91 @@ export default function CarbonSyncScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, backgroundColor: '#fff' },
-  toggleRow: { flexDirection: 'row', backgroundColor: '#f0f0f0', borderRadius: 12, padding: 4, marginBottom: 16, marginTop: 40 },
+  heroCard: {
+    marginTop: 36,
+    borderRadius: 24,
+    paddingVertical: 18,
+    paddingHorizontal: 18,
+    marginBottom: 14,
+    shadowColor: '#0D5A46',
+    shadowOpacity: 0.28,
+    shadowRadius: 16,
+    elevation: 7,
+  },
+  purposeRow: {
+    flexDirection: 'row',
+    marginTop: 12,
+    gap: 8,
+  },
+  purposePill: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+  },
+  purposeText: {
+    color: '#E8FFF5',
+    fontWeight: '800',
+    fontSize: 11,
+    letterSpacing: 0.3,
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(13,90,70,0.14)',
+    borderRadius: 14,
+    padding: 5,
+    marginBottom: 16,
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(13,90,70,0.2)'
+  },
   toggleBtn: { flex: 1, padding: 10, borderRadius: 10, alignItems: 'center' },
-  toggleActive: { backgroundColor: '#fff', elevation: 2 },
-  toggleText: { fontSize: 14, color: '#999', fontWeight: '600' },
-  toggleTextActive: { color: '#1D9E75' },
-  header: { fontSize: 28, fontWeight: 'bold', color: '#1B5E20' },
-  subHeader: { fontSize: 14, color: '#666', marginBottom: 16, marginTop: 4 },
+  toggleActive: { backgroundColor: '#0D5A46', elevation: 2 },
+  toggleText: { fontSize: 14, color: '#2D554A', fontWeight: '700' },
+  toggleTextActive: { color: '#FFFFFF' },
+  header: { fontSize: 30, fontWeight: '900', color: '#FFFFFF', letterSpacing: 0.3 },
+  subHeader: { fontSize: 14, color: 'rgba(255,255,255,0.88)', marginTop: 6, lineHeight: 20 },
   uploadZone: {
+    position: 'relative',
     height: 160,
     borderWidth: 2,
-    borderColor: '#1D9E75',
+    borderColor: 'rgba(13,90,70,0.42)',
     borderStyle: 'dashed',
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F5FAF8',
+    backgroundColor: 'rgba(255,255,255,0.78)',
     overflow: 'hidden',
     marginBottom: 10,
   },
-  uploadText: { color: '#1D9E75', fontSize: 16, marginTop: 10, fontWeight: '500' },
+  uploadGradient: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  uploadText: { color: '#0D5A46', fontSize: 16, marginTop: 10, fontWeight: '700' },
   previewImage: { width: '100%', height: '100%' },
+  scanLine: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    height: 2,
+    borderRadius: 2,
+    backgroundColor: '#57E8B0',
+    shadowColor: '#57E8B0',
+    shadowOpacity: 0.9,
+    shadowRadius: 8,
+    elevation: 3,
+  },
   loadingBox: { marginTop: 10, alignItems: 'center' },
   loadingText: { marginTop: 10, color: '#1D9E75', fontStyle: 'italic' },
   resultCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     padding: 16,
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255,255,255,0.93)',
     borderRadius: 15,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#EEE',
+    borderColor: 'rgba(13,90,70,0.08)',
     elevation: 2,
     alignItems: 'center'
   },
@@ -544,10 +655,10 @@ const styles = StyleSheet.create({
   vsAvgText: { color: '#fff', fontSize: 13, fontWeight: '600' },
   section: { marginBottom: 12 },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: '#1B5E20', marginBottom: 8 },
-  leakCard: { backgroundColor: '#FFF8E1', borderRadius: 12, padding: 14, marginBottom: 8, borderLeftWidth: 3, borderLeftColor: '#EF9F27' },
+  leakCard: { backgroundColor: 'rgba(255,248,225,0.95)', borderRadius: 12, padding: 14, marginBottom: 8, borderLeftWidth: 3, borderLeftColor: '#EF9F27' },
   leakIssue: { fontSize: 13, fontWeight: '600', color: '#333' },
   leakMeta: { fontSize: 12, color: '#888', marginTop: 4 },
-  savingsCard: { backgroundColor: '#F5FAF8', borderRadius: 12, padding: 14, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  savingsCard: { backgroundColor: 'rgba(245,250,248,0.95)', borderRadius: 12, padding: 14, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   savingsLeft: { flex: 1 },
   savingsAction: { fontSize: 13, fontWeight: '600', color: '#333' },
   savingsMeta: { fontSize: 11, color: '#888', marginTop: 4 },
